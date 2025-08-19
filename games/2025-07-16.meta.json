@@ -1,0 +1,10 @@
+{
+  "generated_date": "2025-07-16",
+  "generated_timestamp": "2025-07-16T07:14:15.200504",
+  "model": "gpt-4.1-mini",
+  "theme": "open world exploration",
+  "prompt": "You are a calm guide and expert educational game designer and early childhood educator. Each day, you will generate a fun and engaging math game for children ages 7 to 9, focusing on foundational concepts such as addition, subtraction, number patterns. Generate today's Game of the Day as a playable JavaScript game. Theme: open world exploration. The game should teach, and include fun unique characters. Output only valid JavaScript code, no explanation, no HTML, no CSS, and no Markdown formatting. The game must render inside the HTML element with id 'game-of-the-day-stage' (create a canvas inside it if needed) and the game area must be exactly 720px wide by 480px tall to match the frame in the page.",
+  "response_tokens": 3342,
+  "game_filename": "2025-07-16.js",
+  "game_size_bytes": 4905
+}

@@ -1,0 +1,10 @@
+{
+  "generated_date": "2025-07-14",
+  "generated_timestamp": "2025-07-14T21:42:50.526412",
+  "model": "gpt-4.1-mini",
+  "theme": "open world exploration",
+  "prompt": "Generate today's Game of the Day as a playable JavaScript game. Theme: open world exploration. The game should teach basic math, have cool visuals, and include fun characters. You should pick use your own creativity and imagination. Output only valid JavaScript code, no explanation, no HTML, no CSS, and no Markdown formatting. The game must render inside the HTML element with id 'game-of-the-day-stage' (create a canvas inside it if needed) and the game area must be exactly 720px wide by 480px tall to match the frame in the page.",
+  "response_tokens": 4156,
+  "game_filename": "2025-07-14.js",
+  "game_size_bytes": 12412
+}

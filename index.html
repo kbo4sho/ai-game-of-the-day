@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Game of the Day</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #6C63FF;
+            --secondary-color: #00F5FF;
+            --accent-color: #FFB300;
+            --background-color: #0A0A1F;
+            --card-bg: #1A1A2E;
+            --text-primary: #FFFFFF;
+            --text-secondary: #B8B8D4;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(108, 99, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(0, 245, 255, 0.1) 0%, transparent 50%);
+        }
+
+        .header {
+            background-color: rgba(26, 26, 46, 0.8);
+            color: var(--text-primary);
+            text-align: center;
+            padding: 1rem;
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(108, 99, 255, 0.3);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            letter-spacing: 1px;
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+        }
+
+        .header p {
+            margin: 0.5rem 0 0;
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+            letter-spacing: 0.5px;
+        }
+
+        .games-container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .game-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            aspect-ratio: 2/3;
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(108, 99, 255, 0.2);
+        }
+
+        .game-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transition: transform 0.3s ease;
+            background-color: var(--card-bg);
+        }
+
+        .game-card:hover img {
+            transform: scale(1.05);
+        }
+
+        .game-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 1.5rem;
+            background: linear-gradient(to top, rgba(26, 26, 46, 0.95), rgba(26, 26, 46, 0.8));
+            backdrop-filter: blur(5px);
+        }
+
+        .game-card h2 {
+            color: var(--text-primary);
+            margin: 0;
+            font-size: 1.5rem;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            letter-spacing: 0.5px;
+        }
+
+        .game-card p {
+            color: var(--text-secondary);
+            margin: 0.5rem 0 0;
+            font-size: 0.9rem;
+            font-weight: 400;
+            line-height: 1.4;
+        }
+
+        .difficulty {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .easy { color: #4CAF50; }
+        .medium { color: #FF9800; }
+        .hard { color: #FF5252; }
+
+        .footer {
+            text-align: center;
+            padding: 1rem;
+            background-color: rgba(26, 26, 46, 0.8);
+            color: var(--text-secondary);
+            margin-top: 2rem;
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(108, 99, 255, 0.3);
+            font-size: 0.9rem;
+            letter-spacing: 0.5px;
+        }
+
+        .game-of-the-day-stage {
+            width: 900px;
+            max-width: 98vw;
+            margin: 3rem auto 5.5rem auto;
+            background: var(--card-bg);
+            border-radius: 32px;
+            box-shadow: 0 12px 48px 0 rgba(0,0,0,0.55), 0 0 32px 4px var(--primary-color);
+            padding: 2.5rem 3rem 0rem 3rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: none;
+            position: relative;
+            margin-bottom: 0.5rem;
+            overflow: visible;
+        }
+        .game-of-the-day-stage h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+            letter-spacing: 1px;
+            text-shadow: 0 2px 8px rgba(108,99,255,0.15);
+        }
+        #game-of-the-day-stage {
+            width: 720px;
+            height: 480px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #18182e;
+            border-radius: 8px;
+            /* box-shadow: 0 4px 8px rgba(0,0,0,0.15); */
+            /* box-shadow: inset 0 0 32px 0 rgba(0,0,0,0.45); */
+            margin: 0 auto 8px auto;
+            overflow: hidden;
+            position: relative;
+        }
+        #game-of-the-day-stage::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 8px;
+            box-shadow: inset 0 0 32px 0 rgba(0,0,0,0.45);
+            pointer-events: none;
+            z-index: 1;
+        }
+        #game-of-the-day-stage::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 8px;
+            box-shadow: inset 0 0 32px 0 rgba(0,0,0,0.45);
+            pointer-events: none;
+            z-index: 10;
+        }
+        #game-of-the-day-stage > * {
+            position: relative;
+            z-index: 2;
+        }
+        .hall-of-fame-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 4rem auto 2rem auto;
+            max-width: 800px;
+            padding: 0 2rem;
+            position: relative;
+        }
+
+        .hall-of-fame-header h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            text-align: center;
+            margin: 0;
+            letter-spacing: 3px;
+            text-shadow: 0 0 20px rgba(108, 99, 255, 0.5);
+            background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: relative;
+            z-index: 2;
+        }
+
+        .header-decoration {
+            flex: 1;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+            position: relative;
+            margin: 0 2rem;
+        }
+
+        .header-decoration::before,
+        .header-decoration::after {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 10px var(--primary-color);
+        }
+
+        .header-decoration.left::before {
+            left: 0;
+        }
+
+        .header-decoration.left::after {
+            right: 0;
+        }
+
+        .header-decoration.right::before {
+            left: 0;
+        }
+
+        .header-decoration.right::after {
+            right: 0;
+        }
+
+        .header-decoration.left {
+            background: linear-gradient(90deg, transparent, var(--primary-color));
+        }
+
+        .header-decoration.right {
+            background: linear-gradient(90deg, var(--primary-color), transparent);
+        }
+
+        .daily-games-section {
+            max-width: 1400px;
+            margin: 0;
+            padding: 2.5rem 0 0 0;
+        }
+
+        .daily-games-section h3 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            color: var(--secondary-color);
+            text-align: center;
+            margin-top: 2rem;
+            margin-bottom: 0;
+            letter-spacing: 1px;
+            text-shadow: 0 0 15px rgba(0, 245, 255, 0.3);
+        }
+
+        .daily-games-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 2rem 1rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .daily-game-card {
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            margin: 0.2rem;
+            background: rgba(108, 99, 255, 0.1);
+            border: 1px solid rgba(108, 99, 255, 0.3);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-align: center;
+            min-width: 6.5rem;
+        }
+        .daily-game-card h4 {
+            margin: 0;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+
+
+        .daily-game-card:hover {
+            background: rgba(108, 99, 255, 0.2);
+            border-color: var(--primary-color);
+            transform: translateY(-1px);
+        }
+
+        .daily-game-card.today {
+            background: rgba(255, 179, 0, 0.2);
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .daily-game-card.active {
+            background: rgba(108, 99, 255, 0.3);
+            border-color: var(--primary-color);
+            transform: scale(1.05);
+        }
+
+        /* Special styling for today's card when it's active */
+        /* .daily-game-card.today.active {
+            border-color: var(--accent-color);
+            box-shadow: 0 12px 48px 0 rgba(0,0,0,0.55), 0 0 32px 4px var(--accent-color);
+        }
+
+        .daily-game-card.today.active::before {
+            background: linear-gradient(90deg, var(--accent-color), #FF8E53);
+        }
+
+        .daily-game-card.today.active::after {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 15px var(--accent-color);
+        } */
+
+        .daily-game-card.future {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .daily-game-card.future:hover {
+            transform: none;
+            background: rgba(108, 99, 255, 0.1);
+        }
+
+
+
+
+
+
+
+
+
+
+
+        .back-to-today-btn {
+            background: rgba(108, 99, 255, 0.1);
+            color: var(--text-secondary);
+            border: 1px solid rgba(108, 99, 255, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: -0.5rem;
+            margin-bottom: 1.5rem;
+            backdrop-filter: blur(10px);
+            position: relative;
+            z-index: 10;
+        }
+
+        .back-to-today-btn:hover {
+            background: rgba(108, 99, 255, 0.2);
+            color: var(--text-primary);
+            border-color: var(--primary-color);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(108, 99, 255, 0.2);
+        }
+
+        .loading {
+            color: var(--secondary-color);
+            font-size: 1.2rem;
+            text-align: center;
+            font-family: 'Inter', sans-serif;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+
+        .game-loading-animation {
+            opacity: 0;
+            transform: scale(0.8);
+            animation: gameLoadIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+        }
+
+        @keyframes gameLoadIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            50% {
+                opacity: 0.8;
+                transform: scale(1.05);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .metadata-btn {
+            background: rgba(108, 99, 255, 0.1);
+            color: var(--text-secondary);
+            border: 1px solid rgba(108, 99, 255, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .metadata-btn:hover {
+            background: rgba(108, 99, 255, 0.2);
+            color: var(--text-primary);
+            border-color: var(--primary-color);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(108, 99, 255, 0.2);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(108, 99, 255, 0.3);
+            position: relative;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(108, 99, 255, 0.2);
+        }
+
+        .modal-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .metadata-content {
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+        }
+
+        .metadata-content h3 {
+            color: var(--secondary-color);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .metadata-content p {
+            margin: 0.5rem 0;
+        }
+
+        .metadata-content code {
+            background: rgba(108, 99, 255, 0.1);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .metadata-content pre {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        .metadata-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        @media (max-width: 600px) {
+            .modal-content {
+                margin: 1rem;
+                padding: 1.5rem;
+                max-height: 90vh;
+            }
+            
+            .modal-title {
+                font-size: 1.3rem;
+            }
+            
+            .metadata-btn {
+                top: 0.5rem;
+                right: 0.5rem;
+                padding: 0.4rem 0.8rem;
+                font-size: 0.7rem;
+            }
+        }
+
+        .error-message {
+            color: var(--accent-color);
+            font-size: 1.2rem;
+            text-align: center;
+            margin: 2rem;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .daily-game-spacer {
+            flex: 0 0 50%;
+            height: 1px;
+            pointer-events: none;
+            background: transparent;
+        }
+
+        @media (max-width: 800px) {
+            #game-of-the-day-stage {
+                width: 100%;
+                height: calc(66vw * 2 / 3); /* maintain 3:2 ratio */
+                min-height: 220px;
+                max-height: 70vw;
+                margin-bottom: 8px;
+            }
+            .game-of-the-day-stage {
+                max-width: 98vw;
+                padding: 1.5rem 0.5rem 2rem 0.5rem;
+            }
+            .hall-of-fame-header {
+                margin: 3rem auto 1.5rem auto;
+                padding: 0 1rem;
+            }
+            .hall-of-fame-header h2 {
+                font-size: 2rem;
+                letter-spacing: 2px;
+            }
+            .header-decoration {
+                margin: 0 1rem;
+            }
+            .daily-games-container {
+                gap: 0.25rem;
+                padding: 1rem 0.5rem;
+            }
+            .daily-game-card {
+                padding: 0.3rem 0.6rem;
+                font-size: 0.65rem;
+                min-width: 5.5rem;
+            }
+            
+            /* Mobile styles for main game cards */
+            .games-container {
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 1.5rem;
+                padding: 0 0.75rem;
+                margin: 1.5rem auto;
+            }
+            
+            .game-card {
+                aspect-ratio: 3/4;
+                border-radius: 16px;
+            }
+            
+            .game-info {
+                padding: 1.25rem;
+            }
+            
+            .game-card h2 {
+                font-size: 1.3rem;
+                letter-spacing: 0.3px;
+            }
+            
+            .game-card p {
+                font-size: 0.85rem;
+                margin: 0.4rem 0 0;
+            }
+            
+            .difficulty {
+                font-size: 0.75rem;
+                padding: 0.25rem 0.6rem;
+                margin-top: 0.4rem;
+            }
+        }
+        
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .header p {
+                font-size: 1rem;
+            }
+            
+            .daily-games-container {
+                gap: 0.2rem;
+                padding: 0.75rem 0.375rem;
+            }
+            
+            .daily-game-card {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.55rem;
+                min-width: 5rem;
+            }
+            
+            .games-container {
+                grid-template-columns: 1fr;
+                gap: 1.25rem;
+                padding: 0 0.5rem;
+                margin: 1rem auto;
+            }
+            
+            .game-card {
+                aspect-ratio: 2.5/3.5;
+                border-radius: 14px;
+            }
+            
+            .game-info {
+                padding: 1rem;
+            }
+            
+            .game-card h2 {
+                font-size: 1.2rem;
+                letter-spacing: 0.2px;
+            }
+            
+            .game-card p {
+                font-size: 0.8rem;
+                margin: 0.3rem 0 0;
+                line-height: 1.3;
+            }
+            
+            .difficulty {
+                font-size: 0.7rem;
+                padding: 0.2rem 0.5rem;
+                margin-top: 0.3rem;
+            }
+            
+            .hall-of-fame-header h2 {
+                font-size: 1.8rem;
+                letter-spacing: 1.5px;
+            }
+            
+            .header-decoration {
+                margin: 0 0.75rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.8rem;
+            }
+            
+            .header p {
+                font-size: 0.9rem;
+            }
+            
+            .daily-games-container {
+                gap: 0.15rem;
+                padding: 0.5rem 0.25rem;
+            }
+            
+            .daily-game-card {
+                padding: 0.2rem 0.4rem;
+                font-size: 0.5rem;
+                min-width: 4.5rem;
+            }
+            
+            .games-container {
+                gap: 1rem;
+                padding: 0 0.4rem;
+            }
+            
+            .game-card {
+                aspect-ratio: 2.2/3;
+                border-radius: 12px;
+            }
+            
+            .game-info {
+                padding: 0.875rem;
+            }
+            
+            .game-card h2 {
+                font-size: 1.1rem;
+                letter-spacing: 0.1px;
+            }
+            
+            .game-card p {
+                font-size: 0.75rem;
+                margin: 0.25rem 0 0;
+                line-height: 1.25;
+            }
+            
+            .difficulty {
+                font-size: 0.65rem;
+                padding: 0.15rem 0.4rem;
+                margin-top: 0.25rem;
+            }
+            
+            .hall-of-fame-header h2 {
+                font-size: 1.6rem;
+                letter-spacing: 1px;
+            }
+            
+            .header-decoration {
+                margin: 0 0.5rem;
+            }
+            
+            .footer {
+                padding: 0.75rem;
+                font-size: 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+   
+
+    <!-- Game of the Day Stage -->
+    <div class="game-of-the-day-stage" style="position: relative;">
+        <div class="hall-of-fame-header">
+            <div class="header-decoration left"></div>
+            <h2>AI GAME OF THE DAY</h2>
+            <div class="header-decoration right"></div>
+        </div>
+        <p style="margin-top: -0.5rem; margin-bottom: 0rem; color: var(--text-secondary); font-size: 1rem; font-style: italic; text-align: center; max-width: 90%;">
+            a new AI-generated game each day.
+        </p>
+        <div id="game-of-the-day-stage"></div>
+        <button class="metadata-btn" onclick="showMetadata()">Metadata</button>
+        <div class="daily-games-section">
+            <div class="daily-games-container" id="daily-games-container">
+                <!-- Daily game cards will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Metadata Modal -->
+    <div class="modal-overlay" id="metadata-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Game Metadata</h3>
+                <button class="modal-close" onclick="hideMetadata()">&times;</button>
+            </div>
+            <div class="metadata-content" id="metadata-content">
+                <!-- Metadata content will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Hall of Fame Header -->
+    <div class="hall-of-fame-header">
+        <div class="header-decoration left"></div>
+        <h2>HALL OF FAME</h2>
+        <div class="header-decoration right"></div>
+    </div>
+
+    <div class="games-container">
+        <!-- Endless Adventure -->
+        <a href="endless-adventure.html" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+          <div class="game-card">
+            <img src="endless-adventure.png" alt="Endless Adventure">
+            <div class="game-info">
+              <h2>Endless Adventure</h2>
+              <p>Explore an infinite world of math and mystery!</p>
+              <span class="difficulty medium">Medium</span>
+            </div>
+          </div>
+        </a>
+            <!-- Tens and Trails -->
+            <a href="tens-and-trails.html" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+              <div class="game-card">
+                <img src="tens-and-trails.svg" alt="Tens and Trails">
+                <div class="game-info">
+                  <h2>Tens and Trails</h2>
+                  <p>Make tens as you trek the trail!</p>
+                  <span class="difficulty easy">Easy</span>
+                </div>
+              </div>
+            </a>
+        <!-- Fireball Attack -->
+        <a href="https://kbo4sho.github.io/fireball-attack/" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+            <div class="game-card">
+                <img src="fireball-attack.png" alt="Fireball Attack">
+                <div class="game-info">
+                    <h2>Fireball Attack</h2>
+                    <p>Dodge cosmic fireballs while solving math problems!</p>
+                    <span class="difficulty easy">Easy</span>
+                </div>
+            </div>
+        </a>
+
+        <!-- Space Race -->
+        <a href="https://kbo4sho.github.io/space-race/" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+        <div class="game-card">
+            <img src="space-race.png" alt="Space Race">
+            <div class="game-info">
+                <h2>Space Race</h2>
+                <p>Race through the stars with math-powered rockets!</p>
+                <span class="difficulty medium">Medium</span>
+            </div>
+        </div>
+        </a>
+        <!-- Black Hole Challenge -->
+        <a href="https://kbo4sho.github.io/black-hole-challenge/" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+        <div class="game-card">
+            <img src="black-hole-challenge.png" alt="Black Hole Challenge">
+            <div class="game-info">
+                <h2>Black Hole Challenge</h2>
+                <p>Solve equations to escape the gravitational pull!</p>
+                <span class="difficulty hard">Hard</span>
+            </div>
+        </div>
+        </a>
+    </div>
+
+    <div class="footer">
+        <p>Game of the Day by <a href="https://github.com/kbo4sho/learning-time" target="_blank" rel="noopener noreferrer">kbo4sho</a></p>
+    </div>
+    <script src="script.js?v=10"></script>
+</body>
+</html> 
