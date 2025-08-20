@@ -124,8 +124,8 @@ The game must:
 • Reinforce the math concept through a real-world narratives tied to theme.
 • Include fun, unique memorable characters tied to the theme.
 • Use visually calming and interesting and wacky elements.
-• Include sound, using the Web Audio API for correct/incorrect feedback, gentle background effects, or interactions.
-• Render entirely inside the existing HTML element with ID game-of-the-day-stage. You may create a <canvas> inside it.
+• Include sound, using the Web Audio API for correct/incorrect feedback, gentle background effects, or interactions. Use an audio context.
+• Render entirely inside the existing HTML element with ID game-of-the-day-stage. You may create a canvas element inside it .
 • Have a game area exactly 720px wide by 480px tall.
 • Be written in clean, readable JavaScript with proper formatting, indentation, and comments.
 • Use modern JavaScript practices and avoid minification.
@@ -232,7 +232,7 @@ Functionality improvements needed:
 - Include game state management (score, lives, levels, etc.)
 
 The game must:
-• Render entirely inside the existing HTML element with ID game-of-the-day-stage. You may create a <canvas> inside it.
+• Render entirely inside the existing HTML element with ID game-of-the-day-stage. You may create a canvas element inside it.
 • Have a game area exactly 720px wide by 480px tall.
 • Be written in clean, readable JavaScript with proper formatting, indentation, and comments.
 • Use modern JavaScript practices and avoid minification.
@@ -363,7 +363,7 @@ improve_prompt = f"""You are an expert educational game designer.
 Take the following JavaScript game code and improve ONLY the visuals and audio. 
 Do not change the game mechanics or math logic. 
 Enhance the visual appeal (colors, animations, backgrounds, characters), avoid overstimulation with sounds and visuals, and add or improve sound effects and background audio. 
-Render entirely inside the existing HTML element with ID game-of-the-day-stage. You may create a <canvas> inside it.
+Render entirely inside the existing HTML element with ID game-of-the-day-stage. You may create a canvas element inside it (do not include angle brackets in text instructions).
 Have a game area exactly 720px wide by 480px tall.
 Be written in clean, readable JavaScript with proper formatting, indentation, and comments.
 Use modern JavaScript practices and avoid minification.
