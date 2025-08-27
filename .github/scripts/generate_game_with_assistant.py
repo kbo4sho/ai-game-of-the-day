@@ -106,7 +106,7 @@ def validate_no_external_dependencies(code):
 
 # Configuration variables
 MODEL_NAME = "gpt-5-mini" 
-THEME_OF_THE_DAY = "electricity"
+THEME_OF_THE_DAY = "machines"
 ACCESSIBILITY_THRESHOLD = 60  # Minimum accessibility score required
 
 # Load your OpenAI API key from GitHub Secrets or environment
@@ -120,7 +120,9 @@ with open('games/latest.js', 'r') as f:
 prompt = f"""You are an expert educational game designer. Each day, you will generate a fun, playable math game in JavaScript for children ages 7 to 9, focused on foundational concepts. Today's theme: {THEME_OF_THE_DAY}
 
 The game must:
-• Be engaging and fun first by having a primary visually interesting game mechanic, age-appropriate, and suitable for early learners.
+• Be fun.
+• Be beatable.
+• Be engaging, age-appropriate, and suitable for early learners.
 • Reinforce the math concept through a real-world narratives tied to theme.
 • Include fun, unique memorable characters tied to the theme.
 • Use visually calming and interesting and wacky elements.

@@ -395,12 +395,12 @@ function setDateMessage(dateString) {
     const todayString = formatDateString(today);
     const dateMsg = document.createElement('div');
     dateMsg.className = 'date-message';
-    dateMsg.style.cssText = 'color: var(--text-secondary); font-size: 0.7rem; font-weight: 300; opacity: 0.6; font-style: italic; text-align: center; margin-bottom: 1.2rem; margin-top: 0.5rem;';
-    if (dateString === todayString) {
-        dateMsg.textContent = `Playing today's challenge`;
-    } else {
-        dateMsg.textContent = `Playing the challenge for ${dateString}`;
-    }
+    dateMsg.style.cssText = 'color: var(--text-secondary); font-size: 0.7rem; font-weight: 300; opacity: 0.6; font-style: italic; text-align: center;';
+    // if (dateString === todayString) {
+    //     dateMsg.textContent = `Playing today's challenge`;
+    // } else {
+    //     dateMsg.textContent = `Playing the challenge for ${dateString}`;
+    // }
     gameSubtitle.insertAdjacentElement('afterend', dateMsg);
 }
 
@@ -419,8 +419,8 @@ function loadDailyGame(dateString) {
     }, 800);
 
     // Always keep the header and subtitle
-    gameTitle.textContent = 'Game of the Day';
-    gameSubtitle.textContent = 'a new AI-generated game each day.';
+    gameTitle.textContent = 'AI Game of the Day';
+    gameSubtitle.textContent = '';
 
     // Remove any existing date message
     const existingDateMsg = document.querySelector('.date-message');
@@ -545,8 +545,8 @@ function loadTodaysGame() {
     }, 800);
 
     // Always keep the header and subtitle
-    gameTitle.textContent = 'Game of the Day';
-    gameSubtitle.textContent = 'a new AI-generated game each day.';
+    gameTitle.textContent = 'AI Game of the Day';
+    gameSubtitle.textContent = '';
 
     // Remove any existing date message
     const existingDateMsg = document.querySelector('.date-message');

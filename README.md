@@ -15,9 +15,9 @@ Features
 
 Why
 
-AI Game of the Day explores how AI can shift from generating static artifacts to powering ongoing, evolving experiences—a future where learning tools grow and adapt daily, shaped by creativity, automation, and feedback.
+AI Game of the Day explores how AI can shift from generating static artifacts to powering ongoing, evolving experiences—a future where fun learning tools grow and adapt daily, shaped by creativity, automation, and feedback. 
 
 Try It Live
 
 You can play all the games here:
-### [Game of the Day Live](https://kbo4sho.github.io/ai-game-of-the-day/)
+### [AI Game of the Day Live](https://kbo4sho.github.io/ai-game-of-the-day/)
