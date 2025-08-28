@@ -117,14 +117,10 @@ with open('games/latest.js', 'r') as f:
     file_content = f.read()
 
 # Step 1: Send a prompt to the Responses API
-prompt = f"""You are an expert educational game designer. Each day, you will generate a fun, playable math game in JavaScript for children ages 7 to 9, focused on foundational concepts. Today's theme: {THEME_OF_THE_DAY}
+prompt = f"""You are an expert educational game designer. You will generate a fun, playable math game in JavaScript for children ages 7 to 9, focused on foundational concepts presented in a way that is engaging and fun. Today's theme: {THEME_OF_THE_DAY}
 
 The game must:
-• Be fun.
 • Be beatable.
-• Be engaging, age-appropriate, and suitable for early learners.
-• Reinforce the math concept through a real-world narratives tied to theme.
-• Include fun, unique memorable characters tied to the theme.
 • Use visually calming and interesting and wacky elements.
 • Include sound, using the Web Audio API for correct/incorrect feedback, gentle background effects, or interactions. Use an audio context.
 • Render entirely inside the existing HTML element with ID game-of-the-day-stage. You may create a canvas element inside it .
@@ -133,8 +129,8 @@ The game must:
 • Use modern JavaScript practices and avoid minification.
 • Include proper error handling for audio and resource loading.
 • Be accessible: include keyboard controls, text alternatives, visual cues for audio, clear instructions, and error handling.
-• Use ONLY canvas-drawn graphics and Web Audio API - NO external image URLs, NO external audio files, NO external dependencies.
-• Create all visual elements using canvas drawing methods (rect, arc, fillText, etc.).
+• Use ONLY canvas-drawn graphics or 3js and Web Audio API - NO external image URLs, NO external audio files, NO external dependencies.
+• Create all visual elements using canvas drawing methods (rect, arc, fillText, etc.) or 3js.
 • Generate all sounds using Web Audio API oscillators and filters.
 • Include proper error handling for audio context creation.
 • Output only JavaScript code. No extra explanation, no markdown formatting, no code blocks, no HTML, no CSS.
