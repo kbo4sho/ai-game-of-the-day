@@ -48,6 +48,7 @@
             letter-spacing: 1px;
             background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             text-transform: uppercase;
         }
@@ -156,9 +157,9 @@
         .game-of-the-day-stage {
             width: 900px;
             max-width: 98vw;
-            margin: 3rem auto 5.5rem auto;
+            margin: 0 auto 5.5rem auto;
             background: var(--card-bg);
-            border-radius: 32px;
+            border-radius: 0 0 32px 32px;
             box-shadow: 0 12px 48px 0 rgba(0,0,0,0.55), 0 0 32px 4px var(--primary-color);
             padding: 2.5rem 3rem 0rem 3rem;
             display: flex;
@@ -217,7 +218,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 4rem auto 2rem auto;
+            margin: 4rem auto 0rem auto;
             max-width: 800px;
             padding: 0 2rem;
             position: relative;
@@ -234,6 +235,7 @@
             text-shadow: 0 0 20px rgba(108, 99, 255, 0.5);
             background: linear-gradient(45deg, var(--primary-color), var(--secondary-color));
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             position: relative;
             z-index: 2;
@@ -287,7 +289,16 @@
         .daily-games-section {
             max-width: 1400px;
             margin: 0;
-            padding: 2.5rem 0 0 0;
+        }
+
+        /* Reduce spacing below the Daily Games header */
+        .daily-games-section .hall-of-fame-header {
+            margin-bottom: 0;
+        }
+
+        /* Make the Daily Games header about half the size */
+        .daily-games-section .hall-of-fame-header h2 {
+            font-size: 1.25rem;
         }
 
         .daily-games-section h3 {
@@ -624,6 +635,10 @@
                 font-size: 2rem;
                 letter-spacing: 2px;
             }
+            /* Daily Games header half-size at this breakpoint */
+            .daily-games-section .hall-of-fame-header h2 {
+                font-size: 1rem;
+            }
             .header-decoration {
                 margin: 0 1rem;
             }
@@ -730,6 +745,10 @@
                 font-size: 1.8rem;
                 letter-spacing: 1.5px;
             }
+            /* Daily Games header half-size at this breakpoint */
+            .daily-games-section .hall-of-fame-header h2 {
+                font-size: 0.9rem;
+            }
             
             .header-decoration {
                 margin: 0 0.75rem;
@@ -791,6 +810,10 @@
                 font-size: 1.6rem;
                 letter-spacing: 1px;
             }
+            /* Daily Games header half-size at this breakpoint */
+            .daily-games-section .hall-of-fame-header h2 {
+                font-size: 0.8rem;
+            }
             
             .header-decoration {
                 margin: 0 0.5rem;
@@ -809,15 +832,20 @@
     <!-- Game of the Day Stage -->
     <div class="game-of-the-day-stage" style="position: relative;">
         <div class="hall-of-fame-header">
-            <div class="header-decoration left"></div>
             <h2>AI GAME OF THE DAY</h2>
-            <div class="header-decoration right"></div>
         </div>
         <p style="color: var(--text-secondary); font-size: 1rem; font-style: italic; text-align: center; max-width: 90%;">
+            Fun AI-crafted learning experiences.
+            <a href="https://github.com/kbo4sho/ai-game-of-the-day" target="_blank" rel="noopener noreferrer" style="color: var(--secondary-color); text-decoration: none;">GitHub repo</a>
         </p>
         <div id="game-of-the-day-stage"></div>
         <button class="metadata-btn" onclick="showMetadata()">Metadata</button>
         <div class="daily-games-section">
+            <div class="hall-of-fame-header">
+                <div class="header-decoration left"></div>
+                <h2>DAILY GAMES</h2>
+                <div class="header-decoration right"></div>
+            </div>
             <div class="daily-games-container" id="daily-games-container">
                 <!-- Daily game cards will be populated by JavaScript -->
             </div>

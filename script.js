@@ -418,9 +418,11 @@ function loadDailyGame(dateString) {
         gameStage.classList.remove('game-loading-animation');
     }, 800);
 
-    // Always keep the header and subtitle
+    // Always keep the header and preserve any existing link in the subtitle
     gameTitle.textContent = 'AI Game of the Day';
-    gameSubtitle.textContent = '';
+    if (gameSubtitle && !gameSubtitle.querySelector('a')) {
+        gameSubtitle.textContent = '';
+    }
 
     // Remove any existing date message
     const existingDateMsg = document.querySelector('.date-message');
@@ -544,9 +546,11 @@ function loadTodaysGame() {
         gameStage.classList.remove('game-loading-animation');
     }, 800);
 
-    // Always keep the header and subtitle
+    // Always keep the header and preserve any existing link in the subtitle
     gameTitle.textContent = 'AI Game of the Day';
-    gameSubtitle.textContent = '';
+    if (gameSubtitle && !gameSubtitle.querySelector('a')) {
+        gameSubtitle.textContent = '';
+    }
 
     // Remove any existing date message
     const existingDateMsg = document.querySelector('.date-message');
