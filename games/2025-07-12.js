@@ -1,10 +1,146 @@
-const stage = document.getElementById('game-of-the-day-stage');
-stage.innerHTML = '';
-const canvas = document.createElement('canvas');
-canvas.width = 720;
-canvas.height = 480;
-stage.appendChild(canvas);
-const ctx = canvas.getContext('2d');
+(function() {
+  'use strict';
+  
+  // ======== Enhanced Adventure Quest - Updated 2025-10-10 ========
+  // Original: Math Adventure Game for ages 7-9
+  // Updates: Modern JS, Web Audio API, Enhanced Accessibility, Better Visuals
+  // Renders into element with ID 'game-of-the-day-stage'
+  // Canvas exactly 720x480. All graphics via canvas. All audio via Web Audio API.
+  
+  // ======== Constants & Setup ========
+  const STAGE_ID = 'game-of-the-day-stage';
+  const WIDTH = 720;
+  const HEIGHT = 480;
+  
+  const container = document.getElementById(STAGE_ID);
+  if (!container) {
+    throw new Error(`Container element with ID "${STAGE_ID}" not found.`);
+  }
+  
+  // Prepare container and canvas
+  container.innerHTML = '';
+  container.style.position = 'relative';
+  const canvas = document.createElement('canvas');
+  canvas.width = WIDTH;
+  canvas.height = HEIGHT;
+  canvas.style.width = WIDTH + 'px';
+  canvas.style.height = HEIGHT + 'px';
+  canvas.tabIndex = 0;
+  canvas.setAttribute('role', 'application');
+  canvas.setAttribute(
+    'aria-label',
+    'Adventure Quest game. Use arrow keys or WASD to move, Space to interact, M to toggle audio, Escape to restart.'
+  );
+  container.appendChild(canvas);
+  
+  const ctx = canvas.getContext('2d');
+  
+  // ======== Audio: Web Audio API Setup ========
+  let audioCtx = null;
+  let audioEnabled = true;
+  let audioInitError = false;
+  
+  // Background audio nodes
+  let bgGain = null;
+  let bgOsc = null;
+  
+  function initAudio() {
+    if (audioCtx || audioInitError) return;
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) {
+        throw new Error('Web Audio API not supported');
+      }
+      audioCtx = new AudioContext();
+      
+      // Create gentle adventure background
+      bgOsc = audioCtx.createOscillator();
+      bgGain = audioCtx.createGain();
+      const filter = audioCtx.createBiquadFilter();
+      
+      filter.type = 'lowpass';
+      filter.frequency.value = 700;
+      bgOsc.type = 'triangle';
+      bgOsc.frequency.value = 90; // Low adventure hum
+      bgGain.gain.value = 0.02; // Very gentle
+      
+      bgOsc.connect(filter);
+      filter.connect(bgGain);
+      bgGain.connect(audioCtx.destination);
+      bgOsc.start();
+      
+    } catch (e) {
+      console.warn('Audio initialization failed:', e);
+      audioInitError = true;
+      audioEnabled = false;
+      audioCtx = null;
+    }
+  }
+  
+  function resumeAudioOnInteraction() {
+    if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch((e) => {
+        console.warn('Audio resume failed:', e);
+        audioEnabled = false;
+      });
+    }
+  }
+  
+  function setAudioEnabled(enabled) {
+    audioEnabled = enabled && !audioInitError;
+    if (bgGain) {
+      bgGain.gain.value = audioEnabled ? 0.02 : 0;
+    }
+  }
+  
+  function playTone({ freq = 440, type = 'sine', duration = 0.15, volume = 0.1, detune = 0 } = {}) {
+    if (!audioEnabled || !audioCtx) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const filter = audioCtx.createBiquadFilter();
+      
+      osc.type = type;
+      osc.frequency.value = freq;
+      osc.detune.value = detune;
+      filter.type = 'lowpass';
+      filter.frequency.value = Math.max(600, freq * 2);
+      
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      const now = audioCtx.currentTime;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(volume, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration - 0.02);
+      
+      osc.start(now);
+      osc.stop(now + duration);
+    } catch (e) {
+      console.warn('Audio playback failed:', e);
+    }
+  }
+  
+  function playCorrectSound() {
+    playTone({ freq: 523, type: 'sine', duration: 0.2, volume: 0.1 });
+    setTimeout(() => playTone({ freq: 659, type: 'sine', duration: 0.2, volume: 0.1 }), 100);
+    setTimeout(() => playTone({ freq: 784, type: 'sine', duration: 0.3, volume: 0.1 }), 200);
+  }
+  
+  function playWrongSound() {
+    playTone({ freq: 220, type: 'sawtooth', duration: 0.3, volume: 0.08 });
+  }
+  
+  function playInteractSound() {
+    playTone({ freq: 440, type: 'triangle', duration: 0.1, volume: 0.06 });
+  }
+  
+  // ======== Game State ========
+  let lastTime = performance.now();
+  let gameMessage = '';
+  let messageTimer = 0;
 
 class Vector2 {
   constructor(x, y) {
