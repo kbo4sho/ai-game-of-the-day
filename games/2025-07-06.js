@@ -403,7 +403,6 @@ function drawHUD() {
   ctx.strokeRect(12, 30, 100, 10);
 }
 
-let lastTime = 0;
 let dtSum = 0;
 let dtMax = 1/30;
 
