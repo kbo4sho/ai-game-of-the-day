@@ -7,7 +7,7 @@ def validate_accessibility(game_code, game_name):
     functionality_issues = []
     functionality_warnings = []
     functionality_score = 0
-    max_score = 8  # Simplified scoring system
+    max_score = 12  # Expanded scoring system
     
     print(f"\n🔍 Validating basic functionality for {game_name}...")
     
@@ -41,7 +41,52 @@ def validate_accessibility(game_code, game_name):
         functionality_issues.append("No game loop/animation found")
         print(f"❌ No game loop/animation found")
     
-    # 4. Error Handling (1 point)
+    # 4. Win Condition (2 points) - NEW!
+    win_patterns = ['win', 'victory', 'won', 'complete', 'success', 'youwin', 'gamewon', 'levelcomplete']
+    win_screen_patterns = ['restart', 'play again', 'playagain', 'game over', 'gameover']
+    win_found = any(pattern in game_code.lower().replace(' ', '').replace('_', '') for pattern in win_patterns)
+    win_screen_found = any(pattern in game_code.lower() for pattern in win_screen_patterns)
+    
+    if win_found and win_screen_found:
+        functionality_score += 2
+        print(f"✅ Win condition and end screen detected")
+    elif win_found or win_screen_found:
+        functionality_score += 1
+        functionality_warnings.append("Partial win condition found - may need win/game over screen")
+        print(f"⚠️  Partial win condition detected")
+    else:
+        functionality_issues.append("No win condition found - game may be endless")
+        print(f"❌ No win condition found")
+    
+    # 5. Loss Condition (2 points) - NEW!
+    loss_patterns = ['lose', 'loss', 'lost', 'fail', 'gameover', 'game over', 'dead', 'lives', 'attempts']
+    loss_found = any(pattern in game_code.lower().replace(' ', '') for pattern in loss_patterns)
+    
+    if loss_found:
+        functionality_score += 2
+        print(f"✅ Loss condition detected")
+    else:
+        functionality_warnings.append("No clear loss condition - game may be too easy or endless")
+        print(f"⚠️  No loss condition detected")
+    
+    # 6. UI Text Spacing (1 point) - NEW!
+    ui_spacing_patterns = ['measureText', 'padding', 'margin', 'spacing']
+    ui_spacing_found = any(pattern in game_code.lower() for pattern in ui_spacing_patterns)
+    
+    # Check for potential UI overlaps (red flag patterns)
+    overlap_warning_patterns = [
+        'fillText.*fillText.*fillText',  # Multiple text draws in sequence without position changes
+        'ctx.fillText.*\n.*ctx.fillText.*\n.*ctx.fillText'  # Multiple text draws close together
+    ]
+    
+    if ui_spacing_found:
+        functionality_score += 1
+        print(f"✅ UI spacing considerations detected")
+    else:
+        functionality_warnings.append("No measureText() usage - text may overlap")
+        print(f"⚠️  No UI spacing detected")
+    
+    # 7. Error Handling (1 point)
     error_patterns = ['try', 'catch', 'console.error', 'console.warn', 'if.*error']
     error_handling = any(pattern in game_code.lower() for pattern in error_patterns)
     if error_handling:
@@ -50,16 +95,6 @@ def validate_accessibility(game_code, game_name):
     else:
         functionality_warnings.append("No error handling found")
         print(f"⚠️  No error handling detected")
-    
-    # 5. Game State Management (1 point)
-    state_patterns = ['score', 'lives', 'level', 'gameState', 'player', 'enemy', 'object']
-    state_found = any(pattern in game_code.lower() for pattern in state_patterns)
-    if state_found:
-        functionality_score += 1
-        print(f"✅ Game state management detected")
-    else:
-        functionality_warnings.append("No game state management found")
-        print(f"⚠️  No game state management detected")
     
     # Calculate percentage
     functionality_percentage = (functionality_score / max_score) * 100

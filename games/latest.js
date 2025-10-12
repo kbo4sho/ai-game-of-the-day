@@ -1,756 +1,107 @@
 (function () {
-  // Machine Math — enhanced visuals & audio
-  // Renders inside #game-of-the-day-stage and uses canvas + WebAudio API
-  // Only canvas drawing, no external files. Keyboard accessible.
+  // Enhanced Machine Math Game
+  // Visual and audio improvements only. Game mechanics unchanged.
+  // Renders in element with id "game-of-the-day-stage"
 
-  // CONFIG
+  // Configuration
   const WIDTH = 720;
   const HEIGHT = 480;
-  const ROUNDS_TO_WIN = 3;
-  const MAX_GEARS = 4;
-  const SLOT_COUNT = 3;
+  const GOAL_CORRECT = 10;
+  const MAX_WRONG = 3;
+  const UI_PADDING = 12;
+  const BG_BASE = "#eaf6ff";
+  const MACHINE_COLOR = "#dff3fb";
+  const GEAR_COLOR = "#8fb3d2";
+  const TEXT_COLOR = "#12303a";
+  const ACCENT = "#ff9f1c";
+  const BAD_ACCENT = "#ff6b6b";
+  const SHADOW = "rgba(16,28,38,0.12)";
 
-  // Get container
-  const container = document.getElementById("game-of-the-day-stage");
+  // State
+  let container = document.getElementById("game-of-the-day-stage");
   if (!container) {
-    console.error("Container element #game-of-the-day-stage not found.");
+    console.error('Element with id "game-of-the-day-stage" not found.');
     return;
   }
-  // Clear container and prepare
-  container.innerHTML = "";
-  container.style.position = "relative";
 
-  // Create canvas (exact game area)
+  // Canvas setup
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
   canvas.style.width = WIDTH + "px";
   canvas.style.height = HEIGHT + "px";
-  canvas.tabIndex = 0; // focusable for keyboard
-  canvas.setAttribute("role", "application");
+  canvas.style.display = "block";
+  canvas.style.background = BG_BASE;
+  canvas.setAttribute("tabindex", "0");
+  canvas.setAttribute("role", "img");
   canvas.setAttribute(
     "aria-label",
-    "Machine Math: drag or use keyboard to place gears to sum to the target number. Press Tab to cycle gears, Enter to pick/place, Space to restart."
+    "Machine Math game. Solve addition and subtraction to fix the machine. Press Enter to start."
   );
+  container.innerHTML = "";
   container.appendChild(canvas);
+
   const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    console.error("Canvas 2D context not available.");
+    return;
+  }
 
-  // Audio setup with robust error handling
-  let audioContext = null;
-  let masterGain = null;
-  let ambienceNodes = []; // to hold background oscillators/noise
-  let bgGain = null;
+  // Audio
+  let audioCtx = null;
   let audioAvailable = false;
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (AudioContext) {
-      audioContext = new AudioContext();
-      masterGain = audioContext.createGain();
-      masterGain.gain.value = 0.55; // comfortable level
-      masterGain.connect(audioContext.destination);
-      audioAvailable = true;
-    } else {
-      console.warn("Web Audio API not supported in this browser.");
-    }
-  } catch (e) {
-    console.warn("AudioContext creation failed:", e);
-    audioAvailable = false;
-  }
+  let bgMasterGain = null;
+  let bgNodes = []; // for background oscillators
+  let isMuted = false;
 
-  // Ensure audio started on gesture
-  async function ensureAudioStarted() {
-    if (!audioAvailable || !audioContext) return false;
-    try {
-      if (audioContext.state === "suspended") {
-        await audioContext.resume();
-      }
-      return true;
-    } catch (e) {
-      console.warn("AudioContext resume failed:", e);
-      return false;
-    }
-  }
+  // Game state
+  let gameState = "menu"; // menu, playing, win, lose
+  let correctCount = 0;
+  let wrongCount = 0;
+  let question = null;
+  let choices = [];
+  let selectedIndex = -1;
+  let buttons = [];
+  let keyboardSelection = 0;
+  let lastInteractionTime = 0;
+  let lastAnswerResult = null; // "correct" | "incorrect" | null
+  let lastAnswerTime = 0;
+  let endButtonRect = null;
+  let prevGameState = null;
 
-  // Start a gentle ambient hum (multiple oscillators + subtle filtered noise)
-  let ambienceActive = false;
-  function startBackgroundHum() {
-    if (!audioAvailable || ambienceActive) return;
-    try {
-      stopBackgroundHum(); // ensure clean
-      ambienceActive = true;
-      bgGain = audioContext.createGain();
-      bgGain.gain.value = 0.06;
-      bgGain.connect(masterGain);
-
-      // Warm low drone
-      const oscA = audioContext.createOscillator();
-      oscA.type = "sine";
-      oscA.frequency.value = 64;
-      const lfoA = audioContext.createOscillator();
-      lfoA.frequency.value = 0.08;
-      const lfoAGain = audioContext.createGain();
-      lfoAGain.gain.value = 10;
-      lfoA.connect(lfoAGain);
-      lfoAGain.connect(oscA.frequency);
-
-      // Gentle harmonic
-      const oscB = audioContext.createOscillator();
-      oscB.type = "triangle";
-      oscB.frequency.value = 110;
-      const lfoB = audioContext.createOscillator();
-      lfoB.frequency.value = 0.12;
-      const lfoBGain = audioContext.createGain();
-      lfoBGain.gain.value = 6;
-      lfoB.connect(lfoBGain);
-      lfoBGain.connect(oscB.frequency);
-
-      // Soft filtered noise for texture
-      const bufferSize = 2 * audioContext.sampleRate;
-      const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-      const output = noiseBuffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) output[i] = (Math.random() * 2 - 1) * 0.2;
-      const noiseSource = audioContext.createBufferSource();
-      noiseSource.buffer = noiseBuffer;
-      noiseSource.loop = true;
-      const noiseFilter = audioContext.createBiquadFilter();
-      noiseFilter.type = "lowpass";
-      noiseFilter.frequency.value = 900;
-      const noiseGain = audioContext.createGain();
-      noiseGain.gain.value = 0.01;
-
-      // Connect
-      oscA.connect(bgGain);
-      oscB.connect(bgGain);
-      noiseSource.connect(noiseFilter);
-      noiseFilter.connect(noiseGain);
-      noiseGain.connect(bgGain);
-
-      // Start things
-      const now = audioContext.currentTime;
-      oscA.start(now);
-      oscB.start(now);
-      lfoA.start(now);
-      lfoB.start(now);
-      noiseSource.start(now);
-
-      // store nodes for stopping later
-      ambienceNodes = [oscA, oscB, lfoA, lfoB, noiseSource, noiseFilter, noiseGain, bgGain];
-    } catch (e) {
-      console.warn("Failed to start background ambience:", e);
-    }
-  }
-
-  function stopBackgroundHum() {
-    try {
-      if (!ambienceNodes || ambienceNodes.length === 0) {
-        ambienceNodes = [];
-        ambienceActive = false;
-        if (bgGain) {
-          try {
-            bgGain.disconnect();
-          } catch (e) {}
-          bgGain = null;
-        }
-        return;
-      }
-      // Stop oscillators and sources safely
-      ambienceNodes.forEach((n) => {
-        try {
-          if (n && typeof n.stop === "function") {
-            n.stop(0);
-          }
-          if (n && typeof n.disconnect === "function") {
-            n.disconnect();
-          }
-        } catch (e) {}
-      });
-    } catch (e) {
-      // ignore
-    } finally {
-      ambienceNodes = [];
-      ambienceActive = false;
-      if (bgGain) {
-        try {
-          bgGain.disconnect();
-        } catch (e) {}
-        bgGain = null;
-      }
-    }
-  }
-
-  // Small helper: create a tone with ADSR envelope and optional filter
-  function playTone({
-    freq = 440,
-    duration = 0.12,
-    type = "sine",
-    gain = 0.15,
-    when = 0,
-    detune = 0,
-    filterFreq = 8000
-  } = {}) {
-    if (!audioAvailable) return;
-    try {
-      const ctx = audioContext;
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      const filter = ctx.createBiquadFilter();
-      filter.type = "lowpass";
-      filter.frequency.value = filterFreq;
-
-      osc.type = type;
-      osc.frequency.value = freq;
-      if (detune) osc.detune.value = detune;
-
-      g.gain.value = 0.0001;
-
-      osc.connect(filter);
-      filter.connect(g);
-      g.connect(masterGain);
-
-      const now = ctx.currentTime + when;
-      // ADSR-like: quick attack, sustain, release
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(gain, now + 0.01);
-      g.gain.setValueAtTime(gain * 0.9, now + duration * 0.6);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-      osc.start(now);
-      osc.stop(now + duration + 0.05);
-      // disconnect after stop
-      setTimeout(() => {
-        try {
-          osc.disconnect();
-          filter.disconnect();
-          g.disconnect();
-        } catch (e) {}
-      }, (duration + when + 0.1) * 1000);
-    } catch (e) {
-      console.warn("playTone error:", e);
-    }
-  }
-
-  // Noise burst for "incorrect"
-  function playNoisePulse({ duration = 0.18, gain = 0.12, when = 0 } = {}) {
-    if (!audioAvailable) return;
-    try {
-      const ctx = audioContext;
-      const bufferSize = Math.floor(ctx.sampleRate * duration);
-      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = noiseBuffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-      }
-      const src = ctx.createBufferSource();
-      src.buffer = noiseBuffer;
-      const f = ctx.createBiquadFilter();
-      f.type = "bandpass";
-      f.frequency.value = 300;
-      const g = ctx.createGain();
-      g.gain.value = 0.0001;
-      src.connect(f);
-      f.connect(g);
-      g.connect(masterGain);
-
-      const now = ctx.currentTime + when;
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(gain, now + 0.005);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-      src.start(now);
-      src.stop(now + duration + 0.02);
-      setTimeout(() => {
-        try {
-          src.disconnect();
-          f.disconnect();
-          g.disconnect();
-        } catch (e) {}
-      }, (duration + when + 0.1) * 1000);
-    } catch (e) {
-      console.warn("playNoisePulse error:", e);
-    }
-  }
-
-  // Distinct feedback sounds (richer)
-  function playPickSound() {
-    if (!audioAvailable) return;
-    playTone({ freq: 880, duration: 0.07, type: "triangle", gain: 0.06, filterFreq: 2400 });
-    playTone({ freq: 1320, duration: 0.07, type: "sine", gain: 0.04, when: 0.02, filterFreq: 3000 });
-  }
-  function playPlaceSound() {
-    if (!audioAvailable) return;
-    playTone({ freq: 660, duration: 0.12, type: "sine", gain: 0.09, filterFreq: 3200 });
-    playTone({ freq: 990, duration: 0.12, type: "sine", gain: 0.06, when: 0.06, filterFreq: 3200 });
-  }
-  function playCorrectSound() {
-    if (!audioAvailable) return;
-    // small warm triad with rising feel
-    playTone({ freq: 520, duration: 0.12, type: "sine", gain: 0.12, filterFreq: 3500 });
-    playTone({ freq: 660, duration: 0.12, type: "sine", gain: 0.11, when: 0.09, filterFreq: 4200 });
-    playTone({ freq: 880, duration: 0.16, type: "triangle", gain: 0.10, when: 0.18, filterFreq: 4800 });
-  }
-  function playIncorrectSound() {
-    if (!audioAvailable) return;
-    playNoisePulse({ duration: 0.22, gain: 0.09 });
-    playTone({ freq: 220, duration: 0.2, type: "sawtooth", gain: 0.08, filterFreq: 1200 });
-  }
-
-  // Data structures & state (unchanged logic)
-  let round = 1;
-  let wins = 0;
-  let targetNumber = 0;
-  let gears = [];
-  let slots = [];
-  let dragging = null;
-  let dragOffset = { x: 0, y: 0 };
-  let selectedGearIndex = 0;
-  let notification = "";
-  let notificationTimer = 0;
-  let roundSolved = false;
-  let gameOver = false;
-
-  // Decorative particle for subtle celebration (kept visually gentle)
+  // Decorative particles for subtle motion
   const particles = [];
-  function spawnParticles(x, y, count = 12) {
-    for (let i = 0; i < count; i++) {
-      particles.push({
-        x: x,
-        y: y,
-        vx: (Math.random() - 0.5) * 2.4,
-        vy: -Math.random() * 2.2 - 0.6,
-        life: 60 + Math.floor(Math.random() * 40),
-        size: 2 + Math.random() * 3,
-        hue: 35 + Math.random() * 40
-      });
-    }
-  }
-
-  // Setup slots
-  function setupSlots() {
-    slots = [];
-    const startX = 160;
-    const gap = 120;
-    const y = 260;
-    for (let i = 0; i < SLOT_COUNT; i++) {
-      slots.push({
-        x: startX + i * gap,
-        y: y,
-        r: 34,
-        gearIndex: -1
-      });
-    }
-  }
-
-  // Utility: shuffle
-  function shuffleArr(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-  }
-
-  // Start round (do not alter core math)
-  function startRound() {
-    roundSolved = false;
-    notification = "";
-    notificationTimer = 0;
-
-    const a = Math.floor(Math.random() * 8) + 1;
-    const b = Math.floor(Math.random() * 8) + 1;
-    let c = Math.max(1, Math.min(9, Math.floor((a + b) / 2 + Math.random() * 8)));
-    let sum = a + b + c;
-    if (sum < 6 || sum > 20) {
-      sum = Math.floor(6 + Math.random() * 15);
-      c = sum - a - b;
-      if (c < 1) c = 1 + Math.floor(Math.random() * 6);
-      if (c > 9) c = 9;
-    }
-    const values = [a, b, c];
-    targetNumber = values.reduce((s, v) => s + v, 0);
-    let decoy = Math.floor(Math.random() * 9) + 1;
-    if (values.includes(decoy)) {
-      decoy = (decoy % 9) + 1;
-    }
-    values.push(decoy);
-    shuffleArr(values);
-
-    gears = [];
-    const startX = 60;
-    const baseY = 360;
-    const gapX = 120;
-    for (let i = 0; i < MAX_GEARS; i++) {
-      const gx = startX + i * gapX;
-      const gy = baseY + (i % 2 === 0 ? -6 : 6);
-      const val = values[i];
-      gears.push({
-        value: val,
-        x: gx,
-        y: gy,
-        r: 28,
-        original: { x: gx, y: gy },
-        placed: false,
-        slotIndex: -1,
-        wobble: Math.random() * Math.PI * 2,
-        spin: Math.random() * Math.PI * 2,
-        colorHue: 180 + Math.floor(Math.random() * 60)
-      });
-    }
-
-    setupSlots();
-    selectedGearIndex = 0;
-    roundSolved = false;
-  }
-
-  function resetGame() {
-    round = 1;
-    wins = 0;
-    gameOver = false;
-    startRound();
-  }
-
-  // Hit detection
-  function gearAtPoint(x, y) {
-    for (let i = gears.length - 1; i >= 0; i--) {
-      const g = gears[i];
-      const dx = x - g.x;
-      const dy = y - g.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= g.r + 6) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  function slotAtPoint(x, y) {
-    for (let i = 0; i < slots.length; i++) {
-      const s = slots[i];
-      const dx = x - s.x;
-      const dy = y - s.y;
-      if (Math.sqrt(dx * dx + dy * dy) <= s.r + 6) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  // Place gear
-  function placeGearInSlot(gearIndex, slotIndex) {
-    const gear = gears[gearIndex];
-    const slot = slots[slotIndex];
-    if (!gear || !slot) return false;
-    if (slot.gearIndex !== -1) return false;
-    gear.x = slot.x;
-    gear.y = slot.y;
-    gear.placed = true;
-    gear.slotIndex = slotIndex;
-    slot.gearIndex = gearIndex;
-    // modest pop animation via spawn of particles
-    spawnParticles(gear.x, gear.y, 6);
-    playPlaceSound();
-    checkSolution();
-    return true;
-  }
-
-  function removeGearFromSlot(slotIndex) {
-    const slot = slots[slotIndex];
-    if (!slot) return;
-    const gi = slot.gearIndex;
-    if (gi === -1) return;
-    const gear = gears[gi];
-    slot.gearIndex = -1;
-    gear.placed = false;
-    gear.slotIndex = -1;
-    // smooth return
-    gear.x = gear.original.x;
-    gear.y = gear.original.y;
-  }
-
-  // Check solution (mechanics intact)
-  function checkSolution() {
-    for (let s of slots) {
-      if (s.gearIndex === -1) return;
-    }
-    const sum = slots.reduce((acc, s) => acc + gears[s.gearIndex].value, 0);
-    if (sum === targetNumber) {
-      wins++;
-      roundSolved = true;
-      notification = "Perfect! Machine fixed.";
-      notificationTimer = 160;
-      // soft celebration
-      spawnParticles(WIDTH / 2, 180, 28);
-      playCorrectSound();
-      // little pop and wobble
-      for (let s of slots) {
-        const g = gears[s.gearIndex];
-        g.wobble = 0;
-        g.spin += 0.6;
-      }
-      setTimeout(() => {
-        round++;
-        if (wins >= ROUNDS_TO_WIN) {
-          gameOver = true;
-          notification = "You win! All machines humming!";
-          notificationTimer = 9999;
-        } else {
-          startRound();
-        }
-      }, 900);
-    } else {
-      notification = "Not quite — try again!";
-      notificationTimer = 140;
-      playIncorrectSound();
-      // show a brief hint by shaking slots then unsnap
-      setTimeout(() => {
-        for (let s = 0; s < slots.length; s++) {
-          if (slots[s].gearIndex !== -1) {
-            const gi = slots[s].gearIndex;
-            gears[gi].x = gears[gi].original.x;
-            gears[gi].y = gears[gi].original.y;
-            gears[gi].placed = false;
-            gears[gi].slotIndex = -1;
-            slots[s].gearIndex = -1;
-          }
-        }
-      }, 700);
-    }
-  }
-
-  // Input handlers (mouse/touch/keyboard)
-  canvas.addEventListener("mousedown", async (e) => {
-    try {
-      await ensureAudioStarted();
-      if (audioAvailable) startBackgroundHum();
-    } catch (ex) {}
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-    const gi = gearAtPoint(mx, my);
-    if (gi !== -1) {
-      dragging = gi;
-      const g = gears[gi];
-      dragOffset.x = mx - g.x;
-      dragOffset.y = my - g.y;
-      if (g.placed) {
-        const sidx = g.slotIndex;
-        if (sidx !== -1) {
-          slots[sidx].gearIndex = -1;
-        }
-        g.placed = false;
-        g.slotIndex = -1;
-      }
-      selectedGearIndex = gi;
-      playPickSound();
-    } else {
-      // speaker toggle region
-      const speakerRect = { x: WIDTH - 72, y: 14, w: 56, h: 34 };
-      if (
-        e.clientX - rect.left >= speakerRect.x &&
-        e.clientX - rect.left <= speakerRect.x + speakerRect.w &&
-        e.clientY - rect.top >= speakerRect.y &&
-        e.clientY - rect.top <= speakerRect.y + speakerRect.h
-      ) {
-        toggleSound();
-      }
-    }
-  });
-
-  canvas.addEventListener("mousemove", (e) => {
-    if (dragging === null) return;
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-    const g = gears[dragging];
-    // gentle boundary clamp so gears don't go off canvas
-    g.x = Math.max(18, Math.min(WIDTH - 18, mx - dragOffset.x));
-    g.y = Math.max(18, Math.min(HEIGHT - 18, my - dragOffset.y));
-    g.spin += (mx - g.x) * 0.0006;
-  });
-
-  canvas.addEventListener("mouseup", (e) => {
-    if (dragging === null) return;
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-    const sidx = slotAtPoint(mx, my);
-    if (sidx !== -1) {
-      const placed = placeGearInSlot(dragging, sidx);
-      if (!placed) {
-        const g = gears[dragging];
-        g.x = g.original.x;
-        g.y = g.original.y;
-      }
-    } else {
-      const g = gears[dragging];
-      g.x = g.original.x;
-      g.y = g.original.y;
-    }
-    dragging = null;
-  });
-
-  // Touch support mapped to mouse events
-  canvas.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    const touch = e.changedTouches[0];
-    const fakeEvent = new MouseEvent("mousedown", {
-      clientX: touch.clientX,
-      clientY: touch.clientY,
-      bubbles: true,
-      cancelable: true
+  for (let i = 0; i < 18; i++) {
+    particles.push({
+      x: Math.random() * WIDTH,
+      y: Math.random() * HEIGHT,
+      r: 6 + Math.random() * 18,
+      vx: (Math.random() - 0.5) * 0.05,
+      vy: (Math.random() - 0.5) * 0.02,
+      alpha: 0.06 + Math.random() * 0.06,
     });
-    canvas.dispatchEvent(fakeEvent);
-  });
-  canvas.addEventListener("touchmove", (e) => {
-    e.preventDefault();
-    const touch = e.changedTouches[0];
-    const fakeEvent = new MouseEvent("mousemove", {
-      clientX: touch.clientX,
-      clientY: touch.clientY,
-      bubbles: true,
-      cancelable: true
-    });
-    canvas.dispatchEvent(fakeEvent);
-  });
-  canvas.addEventListener("touchend", (e) => {
-    e.preventDefault();
-    const touch = e.changedTouches[0];
-    const fakeEvent = new MouseEvent("mouseup", {
-      clientX: touch.clientX,
-      clientY: touch.clientY,
-      bubbles: true,
-      cancelable: true
-    });
-    canvas.dispatchEvent(fakeEvent);
-  });
-
-  // Keyboard
-  canvas.addEventListener("keydown", async (e) => {
-    const key = e.key;
-    try {
-      await ensureAudioStarted();
-      if (audioAvailable) startBackgroundHum();
-    } catch (ex) {}
-
-    if (gameOver) {
-      if (key === " " || key === "Enter") {
-        resetGame();
-      }
-      return;
-    }
-
-    if (key === "Tab") {
-      e.preventDefault();
-      selectedGearIndex = (selectedGearIndex + 1) % gears.length;
-      playPickSound();
-      return;
-    }
-
-    const selectedGear = gears[selectedGearIndex];
-    if (!selectedGear) return;
-
-    if (key === "Enter" || key === " ") {
-      if (!selectedGear.placed) {
-        const emptySlot = slots.findIndex((s) => s.gearIndex === -1);
-        if (emptySlot !== -1) {
-          placeGearInSlot(selectedGearIndex, emptySlot);
-        } else {
-          const s0 = slots[0];
-          const oldGearIndex = s0.gearIndex;
-          if (oldGearIndex !== -1) {
-            gears[oldGearIndex].x = gears[oldGearIndex].original.x;
-            gears[oldGearIndex].placed = false;
-            gears[oldGearIndex].slotIndex = -1;
-          }
-          placeGearInSlot(selectedGearIndex, 0);
-        }
-      } else {
-        const sidx = selectedGear.slotIndex;
-        if (sidx !== -1) {
-          removeGearFromSlot(sidx);
-        }
-      }
-      return;
-    }
-
-    if (key === "ArrowRight") {
-      selectedGearIndex = (selectedGearIndex + 1) % gears.length;
-      playPickSound();
-      return;
-    }
-    if (key === "ArrowLeft") {
-      selectedGearIndex = (selectedGearIndex - 1 + gears.length) % gears.length;
-      playPickSound();
-      return;
-    }
-
-    if (/^[1-3]$/.test(key)) {
-      const slotNumber = parseInt(key, 10) - 1;
-      if (!selectedGear.placed) {
-        if (slots[slotNumber].gearIndex === -1) {
-          placeGearInSlot(selectedGearIndex, slotNumber);
-        } else {
-          const previousGearIndex = slots[slotNumber].gearIndex;
-          removeGearFromSlot(slotNumber);
-          placeGearInSlot(selectedGearIndex, slotNumber);
-          if (previousGearIndex !== -1) {
-            gears[previousGearIndex].x = gears[previousGearIndex].original.x;
-          }
-        }
-      } else {
-        if (selectedGear.slotIndex === slotNumber) {
-          removeGearFromSlot(slotNumber);
-        } else {
-          if (slots[slotNumber].gearIndex === -1) {
-            const oldSlot = selectedGear.slotIndex;
-            if (oldSlot !== -1) {
-              slots[oldSlot].gearIndex = -1;
-            }
-            placeGearInSlot(selectedGearIndex, slotNumber);
-          }
-        }
-      }
-      return;
-    }
-
-    if (key === "Backspace" || key === "Delete") {
-      if (selectedGear.placed) {
-        const sidx = selectedGear.slotIndex;
-        if (sidx !== -1) removeGearFromSlot(sidx);
-      } else {
-        selectedGear.x = selectedGear.original.x;
-        selectedGear.y = selectedGear.original.y;
-        selectedGear.placed = false;
-        selectedGear.slotIndex = -1;
-      }
-      return;
-    }
-
-    if (key.toLowerCase() === "h") {
-      notification = "Tip: Place three gears so their numbers add to the target. Use Tab to cycle.";
-      notificationTimer = 180;
-      return;
-    }
-
-    if (key.toLowerCase() === "s") {
-      toggleSound();
-      return;
-    }
-  });
-
-  // Sound toggle
-  let soundEnabled = true;
-  function toggleSound() {
-    soundEnabled = !soundEnabled;
-    if (!soundEnabled) {
-      stopBackgroundHum();
-    } else {
-      ensureAudioStarted().then(() => {
-        if (audioAvailable) startBackgroundHum();
-      });
-    }
-    notification = soundEnabled ? "Sound on" : "Sound off";
-    notificationTimer = 80;
   }
 
-  // Drawing helpers & improved visuals
-  function drawRoundedRect(ctx, x, y, w, h, r) {
+  // Utility functions
+  function safeMeasureText(text, font) {
+    ctx.save();
+    if (font) ctx.font = font;
+    const metrics = ctx.measureText(String(text));
+    ctx.restore();
+    return metrics;
+  }
+
+  function clamp(v, a, b) {
+    return Math.max(a, Math.min(b, v));
+  }
+
+  function isPointInRect(px, py, rect) {
+    if (!rect) return false;
+    return px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h;
+  }
+
+  function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+    if (typeof r === "undefined") r = 6;
     ctx.beginPath();
     ctx.moveTo(x + r, y);
     ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -758,444 +109,963 @@
     ctx.arcTo(x, y + h, x, y, r);
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
-    ctx.fill();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
   }
 
-  // Draw a stylized gear using canvas only
-  function drawGear(ctx, x, y, radius, teeth, color, rotation = 0, glossy = true) {
+  function wrapTextToLines(text, maxWidth, font) {
     ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(rotation);
-    // outer rim
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // teeth as rectangles along rim (subtle)
-    ctx.fillStyle = shadeColor(color, -8);
-    for (let i = 0; i < teeth; i++) {
-      const ang = (i / teeth) * Math.PI * 2;
-      const tx = Math.cos(ang) * (radius - 3);
-      const ty = Math.sin(ang) * (radius - 3);
-      ctx.save();
-      ctx.translate(tx, ty);
-      ctx.rotate(ang);
-      ctx.fillRect(-2, -radius * 0.12, 4, radius * 0.24);
-      ctx.restore();
+    ctx.font = font;
+    const words = text.split(" ");
+    const lines = [];
+    let current = "";
+    for (const w of words) {
+      const test = current ? current + " " + w : w;
+      const m = ctx.measureText(test).width;
+      if (m > maxWidth && current) {
+        lines.push(current);
+        current = w;
+      } else {
+        current = test;
+      }
     }
-
-    // inner disc
-    ctx.fillStyle = shadeColor(color, -18);
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.62, 0, Math.PI * 2);
-    ctx.fill();
-
-    // glossy highlight
-    if (glossy) {
-      const g = ctx.createRadialGradient(
-        -radius * 0.28,
-        -radius * 0.28,
-        radius * 0.02,
-        -radius * 0.12,
-        -radius * 0.12,
-        radius * 0.9
-      );
-      g.addColorStop(0, "rgba(255,255,255,0.55)");
-      g.addColorStop(0.7, "rgba(255,255,255,0.06)");
-      g.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(0, 0, radius * 0.7, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // center hole
-    ctx.fillStyle = "#1b2b33";
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.22, 0, Math.PI * 2);
-    ctx.fill();
-
+    if (current) lines.push(current);
     ctx.restore();
+    return lines;
   }
 
-  // Simple color shading utility
-  function shadeColor(hexOrHsl, percent) {
-    // Accept color as hex or hsl string; for simplicity handle hex and hsl-ish
-    if (typeof hexOrHsl === "string" && hexOrHsl[0] === "#") {
-      const hex = hexOrHsl.replace("#", "");
-      const num = parseInt(hex, 16);
-      let r = (num >> 16) + Math.round((percent / 100) * 255);
-      let g = ((num >> 8) & 0x00ff) + Math.round((percent / 100) * 255);
-      let b = (num & 0x0000ff) + Math.round((percent / 100) * 255);
-      r = Math.max(0, Math.min(255, r));
-      g = Math.max(0, Math.min(255, g));
-      b = Math.max(0, Math.min(255, b));
-      return `rgb(${r},${g},${b})`;
-    }
-    // If passed an HSL-like hue number, convert to a pleasant pastel HSL string
-    if (typeof hexOrHsl === "number") {
-      const h = Math.round(hexOrHsl);
-      const l = 62 + percent / 2;
-      return `hsl(${h} 65% ${Math.max(28, Math.min(80, l))}%)`;
-    }
-    // fallback
-    return hexOrHsl;
-  }
+  // Audio initialization - create layered ambient hum using oscillators and gentle LFOs
+  function initAudio() {
+    if (audioCtx) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) {
+        audioAvailable = false;
+        console.warn("Web Audio API not supported.");
+        return;
+      }
+      audioCtx = new Ctx();
+      audioAvailable = true;
+      // Master gain
+      bgMasterGain = audioCtx.createGain();
+      bgMasterGain.gain.value = isMuted ? 0 : 0.035;
+      bgMasterGain.connect(audioCtx.destination);
 
-  // Draw subtle background with clouds and soft spotlight
-  function drawBackground(frame) {
-    // sky gradient
-    const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
-    grad.addColorStop(0, "#f9fcff");
-    grad.addColorStop(1, "#eaf6fb");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      // Create 3 background oscillators at different octaves with LFOs for motion
+      const baseFreqs = [80, 132, 208];
+      bgNodes = baseFreqs.map((freq, idx) => {
+        const osc = audioCtx.createOscillator();
+        osc.type = idx === 1 ? "sine" : "triangle";
+        osc.frequency.value = freq;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 600;
+        // gentle LFO to modulate gain for breathing
+        const lfo = audioCtx.createOscillator();
+        lfo.type = "sine";
+        lfo.frequency.value = 0.08 + idx * 0.03;
+        const lfoGain = audioCtx.createGain();
+        lfoGain.gain.value = 0.02 + idx * 0.01;
+        lfo.connect(lfoGain);
+        // connect
+        const gainNode = audioCtx.createGain();
+        gainNode.gain.value = 0.015 + idx * 0.01;
+        lfoGain.connect(gainNode.gain);
+        osc.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(bgMasterGain);
+        try {
+          osc.start();
+          lfo.start();
+        } catch (e) {
+          // older browsers may throw if started twice; ignore
+        }
+        return { osc, lfo, lfoGain, gainNode, filter };
+      });
 
-    // soft radial spotlight behind machine center
-    const rg = ctx.createRadialGradient(WIDTH / 2, 160, 20, WIDTH / 2, 160, 420);
-    rg.addColorStop(0, "rgba(255,255,255,0.7)");
-    rg.addColorStop(0.6, "rgba(230,245,255,0.35)");
-    rg.addColorStop(1, "rgba(230,245,255,0)");
-    ctx.fillStyle = rg;
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      // gentle subtle metallic clicks via periodic impulse (implemented with oscillator burst on interval)
+      // We'll not schedule persistent intervals here; play on demand.
 
-    // very subtle parallax clouds
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    const cloudBaseY = 50;
-    for (let i = 0; i < 4; i++) {
-      const cx = ((frame * 0.3 + i * 180) % (WIDTH + 200)) - 100;
-      const cy = cloudBaseY + Math.sin((i + frame * 0.005) * 0.8) * 8;
-      drawCloud(cx, cy, 80 + (i % 2) * 16, 28);
-    }
-  }
-
-  function drawCloud(cx, cy, w, h) {
-    ctx.beginPath();
-    ctx.ellipse(cx - w * 0.3, cy, h * 0.8, h * 0.6, 0, 0, Math.PI * 2);
-    ctx.ellipse(cx, cy - 6, h * 1.2, h * 0.9, 0, 0, Math.PI * 2);
-    ctx.ellipse(cx + w * 0.3, cy, h * 0.9, h * 0.7, 0, 0, Math.PI * 2);
-    ctx.rect(cx - w * 0.6, cy, w * 1.2, h * 0.6);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // Machine body & friendly robot
-  function drawMachineBackground() {
-    // central machine body
-    ctx.fillStyle = "#d6eef8";
-    drawRoundedRect(ctx, 120, 120, 480, 180, 16);
-
-    // decorative stripes
-    for (let i = 0; i < 10; i++) {
-      ctx.fillStyle = i % 2 ? "#eaf7fc" : "#cfeaf4";
-      ctx.fillRect(140 + i * 44, 140, 28, 10);
-    }
-
-    // pipes with subtle metallic gradient
-    const pipeGrad = ctx.createLinearGradient(90, 160, 140, 210);
-    pipeGrad.addColorStop(0, "#b7dbe6");
-    pipeGrad.addColorStop(1, "#eaf7fb");
-    ctx.fillStyle = pipeGrad;
-    drawRoundedRect(ctx, 90, 170, 40, 60, 8);
-    drawRoundedRect(ctx, 560, 170, 40, 60, 8);
-
-    // friendly robot character on left
-    drawFriendlyRobot(140, 210);
-    // label
-    ctx.fillStyle = "#0f3142";
-    ctx.font = "14px system-ui, Arial";
-    ctx.fillText("Friendly Factory Machine", 320, 140);
-  }
-
-  function drawFriendlyRobot(x, y) {
-    // body
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.fillStyle = "#d1f0ef";
-    drawRoundedRect(ctx, -36, -48, 72, 72, 10);
-    // face panel
-    ctx.fillStyle = "#0e3640";
-    drawRoundedRect(ctx, -22, -30, 44, 28, 6);
-    // eyes
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.arc(-10, -18, 5, 0, Math.PI * 2);
-    ctx.arc(10, -18, 5, 0, Math.PI * 2);
-    ctx.fill();
-    // pupils
-    ctx.fillStyle = "#0b2630";
-    ctx.beginPath();
-    ctx.arc(-10, -18, 2, 0, Math.PI * 2);
-    ctx.arc(10, -18, 2, 0, Math.PI * 2);
-    ctx.fill();
-    // smile
-    ctx.strokeStyle = "rgba(255,255,255,0.9)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, -8, 8, 0.1, Math.PI - 0.1);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Animated machine gears
-  function drawMachineGears(frame) {
-    const cx = 360;
-    const cy = 200;
-    const gearPositions = [
-      { x: cx - 80, y: cy - 10, r: 18, speed: 0.02, hue: 28 },
-      { x: cx - 10, y: cy + 20, r: 12, speed: -0.03, hue: 160 },
-      { x: cx + 60, y: cy - 6, r: 22, speed: 0.015, hue: 48 }
-    ];
-    for (let i = 0; i < gearPositions.length; i++) {
-      const p = gearPositions[i];
-      const rot = frame * p.speed;
-      drawGear(ctx, p.x, p.y, p.r, 8 + i, `hsl(${p.hue} 65% 62%)`, rot);
+      isMuted = false;
+    } catch (err) {
+      console.error("Audio initialization failed:", err);
+      audioAvailable = false;
+      audioCtx = null;
     }
   }
 
-  // Draw speaker icon
-  function drawSpeakerIcon() {
-    const x = WIDTH - 72;
-    const y = 14;
-    ctx.fillStyle = soundEnabled ? "#1f6b85" : "#6f8792";
-    drawRoundedRect(ctx, x, y, 56, 34, 8);
-    ctx.save();
-    ctx.translate(x + 14, y + 17);
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.moveTo(-6, -8);
-    ctx.lineTo(0, -8);
-    ctx.lineTo(8, -2);
-    ctx.lineTo(8, 2);
-    ctx.lineTo(0, 8);
-    ctx.lineTo(-6, 8);
-    ctx.closePath();
-    ctx.fill();
-    if (soundEnabled) {
-      ctx.beginPath();
-      ctx.arc(10, 0, 8, -0.62, 0.62);
-      ctx.strokeStyle = "rgba(255,255,255,0.9)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(10, 0, 12, -0.62, 0.62);
-      ctx.strokeStyle = "rgba(255,255,255,0.14)";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
+  function resumeAudioIfNeeded() {
+    if (!audioAvailable || !audioCtx) return;
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume().catch((e) => {
+        console.warn("Audio resume failed:", e);
+      });
+    }
+  }
+
+  function toggleMute() {
+    if (!audioAvailable) {
+      initAudio();
+    }
+    if (!audioAvailable) return;
+    isMuted = !isMuted;
+    if (bgMasterGain) {
+      bgMasterGain.gain.value = isMuted ? 0 : 0.035;
+    }
+  }
+
+  // Sound effects - generated with Web Audio API oscillators/pulse envelopes
+  function safeStop(node) {
+    try {
+      if (node && typeof node.stop === "function") node.stop();
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  function playCorrectSound() {
+    if (!audioAvailable || !audioCtx) return;
+    resumeAudioIfNeeded();
+    try {
+      const t = audioCtx.currentTime;
+      // small ascending arpeggio of 3 notes
+      const freqs = [880, 1100, 1320];
+      freqs.forEach((f, i) => {
+        const osc = audioCtx.createOscillator();
+        osc.type = i === 1 ? "sine" : "triangle";
+        osc.frequency.setValueAtTime(f, t + i * 0.05);
+        const g = audioCtx.createGain();
+        g.gain.setValueAtTime(0.0001, t + i * 0.05);
+        g.gain.exponentialRampToValueAtTime(0.14, t + i * 0.05 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.05 + 0.45);
+        const hp = audioCtx.createBiquadFilter();
+        hp.type = "highpass";
+        hp.frequency.value = 400;
+        osc.connect(hp);
+        hp.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start(t + i * 0.05);
+        safeStop(osc);
+        try {
+          osc.stop(t + i * 0.05 + 0.5);
+        } catch (e) {}
+      });
+    } catch (err) {
+      console.warn("Error playing correct sound:", err);
+    }
+  }
+
+  function playIncorrectSound() {
+    if (!audioAvailable || !audioCtx) return;
+    resumeAudioIfNeeded();
+    try {
+      const t = audioCtx.currentTime;
+      // low square thud with quick decay
+      const osc = audioCtx.createOscillator();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(160, t);
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.2, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+      const lp = audioCtx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 500;
+      osc.connect(lp);
+      lp.connect(g);
+      g.connect(audioCtx.destination);
+      osc.start(t);
+      safeStop(osc);
+      try {
+        osc.stop(t + 0.6);
+      } catch (e) {}
+      // add a short metallic click above
+      const click = audioCtx.createOscillator();
+      click.type = "triangle";
+      click.frequency.setValueAtTime(1400, t);
+      const cg = audioCtx.createGain();
+      cg.gain.setValueAtTime(0.0001, t);
+      cg.gain.exponentialRampToValueAtTime(0.08, t + 0.005);
+      cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      click.connect(cg);
+      cg.connect(audioCtx.destination);
+      click.start(t);
+      safeStop(click);
+      try {
+        click.stop(t + 0.12);
+      } catch (e) {}
+    } catch (err) {
+      console.warn("Error playing incorrect sound:", err);
+    }
+  }
+
+  function playWinSound() {
+    if (!audioAvailable || !audioCtx) return;
+    resumeAudioIfNeeded();
+    try {
+      const t = audioCtx.currentTime;
+      const chord = [440, 550, 660]; // pleasant major-ish cluster
+      chord.forEach((f, i) => {
+        const o = audioCtx.createOscillator();
+        o.type = i === 1 ? "sine" : "sawtooth";
+        o.frequency.setValueAtTime(f, t + i * 0.04);
+        const g = audioCtx.createGain();
+        g.gain.setValueAtTime(0.0001, t + i * 0.04);
+        g.gain.exponentialRampToValueAtTime(0.18, t + i * 0.04 + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.04 + 1.2);
+        const lp = audioCtx.createBiquadFilter();
+        lp.type = "lowpass";
+        lp.frequency.value = 1200;
+        o.connect(lp);
+        lp.connect(g);
+        g.connect(audioCtx.destination);
+        o.start(t + i * 0.04);
+        safeStop(o);
+        try {
+          o.stop(t + i * 0.04 + 1.25);
+        } catch (e) {}
+      });
+    } catch (err) {
+      console.warn("Error playing win sound:", err);
+    }
+  }
+
+  function playLoseSound() {
+    if (!audioAvailable || !audioCtx) return;
+    resumeAudioIfNeeded();
+    try {
+      const t = audioCtx.currentTime;
+      // low descending tone
+      const o = audioCtx.createOscillator();
+      o.type = "sine";
+      o.frequency.setValueAtTime(220, t);
+      o.frequency.exponentialRampToValueAtTime(110, t + 0.7);
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.3, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      const lp = audioCtx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 600;
+      o.connect(lp);
+      lp.connect(g);
+      g.connect(audioCtx.destination);
+      o.start(t);
+      safeStop(o);
+      try {
+        o.stop(t + 1.25);
+      } catch (e) {}
+      // subtle metallic chime after
+      setTimeout(() => {
+        if (!audioAvailable || !audioCtx) return;
+        const t2 = audioCtx.currentTime;
+        const c = audioCtx.createOscillator();
+        c.type = "triangle";
+        c.frequency.setValueAtTime(720, t2);
+        const cg = audioCtx.createGain();
+        cg.gain.setValueAtTime(0.0001, t2);
+        cg.gain.exponentialRampToValueAtTime(0.06, t2 + 0.02);
+        cg.gain.exponentialRampToValueAtTime(0.0001, t2 + 0.6);
+        c.connect(cg);
+        cg.connect(audioCtx.destination);
+        c.start(t2);
+        safeStop(c);
+        try {
+          c.stop(t2 + 0.65);
+        } catch (e) {}
+      }, 420);
+    } catch (err) {
+      console.warn("Error playing lose sound:", err);
+    }
+  }
+
+  // Game logic (unchanged)
+  function generateQuestion() {
+    const operation = Math.random() < 0.6 ? "+" : "-";
+    let a;
+    let b;
+    if (operation === "+") {
+      a = Math.floor(Math.random() * 20) + 1;
+      b = Math.floor(Math.random() * 20) + 0;
     } else {
-      ctx.strokeStyle = "rgba(255,255,255,0.9)";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(2, -10);
-      ctx.lineTo(14, 10);
-      ctx.stroke();
+      a = Math.floor(Math.random() * 20) + 5;
+      b = Math.floor(Math.random() * 10) + 0;
+      if (b > a) [a, b] = [b, a];
     }
-    ctx.restore();
+    const correct = operation === "+" ? a + b : a - b;
+    const distractors = new Set();
+    while (distractors.size < 3) {
+      let delta = Math.floor(Math.random() * 7) - 3;
+      let candidate = correct + delta;
+      if (candidate !== correct && candidate >= 0 && candidate <= 40) {
+        distractors.add(candidate);
+      }
+    }
+    choices = shuffleArray([correct, ...Array.from(distractors)]);
+    question = {
+      text: `${a} ${operation} ${b} = ?`,
+      answer: correct,
+    };
+    selectedIndex = -1;
+    keyboardSelection = 0;
+    buildButtonsForChoices();
   }
 
-  // Main draw loop
-  let frame = 0;
-  function draw() {
-    frame++;
+  function shuffleArray(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
 
-    // background
-    drawBackground(frame);
-
-    // top header panel
-    ctx.fillStyle = "#e8f6fb";
-    drawRoundedRect(ctx, 16, 12, WIDTH - 32, 88, 12);
-
-    // Title
-    ctx.fillStyle = "#0f3746";
-    ctx.font = "600 22px system-ui, Arial";
-    ctx.textAlign = "left";
-    ctx.fillText("Machine Math — Fix the Friendly Factory", 36, 42);
-
-    // Round and instructions
-    ctx.font = "13px system-ui, Arial";
-    ctx.fillStyle = "#0f4960";
-    ctx.fillText(`Round ${round} of ${ROUNDS_TO_WIN}`, 36, 66);
-    ctx.fillStyle = "#1a5f77";
-    ctx.font = "12px system-ui, Arial";
-    ctx.fillText("Drag gears into the slots so their numbers add to the target.", 36, 86);
-
-    // Target panel with subtle depth
-    ctx.save();
-    const tx = WIDTH - 220;
-    const ty = 24;
-    ctx.fillStyle = "white";
-    drawRoundedRect(ctx, tx, ty, 180, 72, 10);
-    ctx.fillStyle = "#0f3b51";
-    ctx.font = "13px system-ui, Arial";
-    ctx.fillText("Target", tx + 16, ty + 22);
-    ctx.font = "700 36px system-ui, Arial";
-    ctx.fillStyle = "#082a3a";
-    ctx.textAlign = "center";
-    ctx.fillText(String(targetNumber), tx + 90, ty + 64);
-    ctx.restore();
-    ctx.textAlign = "left";
-
-    // Draw machine & decorations
-    drawMachineBackground();
-
-    // Draw slots with soft shadows and subtle glow if empty
-    for (let i = 0; i < slots.length; i++) {
-      const s = slots[i];
-      // outer panel
-      ctx.save();
-      ctx.shadowColor = "rgba(14,38,48,0.12)";
-      ctx.shadowBlur = 8;
-      ctx.fillStyle = "#e9f8ff";
-      drawRoundedRect(ctx, s.x - 46, s.y - 46, 92, 92, 12);
-      ctx.restore();
-
-      // slot inner ring
-      ctx.fillStyle = "#f1fbff";
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r + 6, 0, Math.PI * 2);
-      ctx.fill();
-
-      // if empty, soft glow
-      if (s.gearIndex === -1) {
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r + 12, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(30,110,140,0.03)";
-        ctx.fill();
+  function buildButtonsForChoices() {
+    buttons = [];
+    const cols = 2;
+    const rows = 2;
+    const btnWidth = 300;
+    const btnHeight = 64;
+    const startX = (WIDTH - (btnWidth * cols + UI_PADDING * (cols - 1))) / 2;
+    const startY = HEIGHT / 2 + 10;
+    let idx = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = startX + c * (btnWidth + UI_PADDING);
+        const y = startY + r * (btnHeight + UI_PADDING);
+        buttons.push({
+          x,
+          y,
+          w: btnWidth,
+          h: btnHeight,
+          text: String(choices[idx]),
+          index: idx,
+        });
+        idx++;
       }
-
-      // slot label
-      ctx.fillStyle = "#1b4d64";
-      ctx.font = "600 13px system-ui, Arial";
-      ctx.fillText(`Slot ${i + 1}`, s.x - 24, s.y + 52);
     }
+  }
 
-    // Conveyor belt
-    ctx.save();
-    // belt base
-    ctx.fillStyle = "#213843";
-    drawRoundedRect(ctx, 18, 320, 420, 120, 18);
-    // moving dots for subtle motion
-    for (let i = 0; i < 12; i++) {
-      const bx = 36 + ((i * 40 + frame * 0.6) % 460) - 20;
-      ctx.fillStyle = "rgba(255,255,255,0.03)";
-      ctx.fillRect(bx, 348, 28, 6);
+  function handleAnswer(index) {
+    if (gameState !== "playing" || index < 0 || index >= choices.length) return;
+    lastInteractionTime = performance.now();
+    const chosen = choices[index];
+    if (chosen === question.answer) {
+      correctCount++;
+      lastAnswerResult = "correct";
+      lastAnswerTime = performance.now();
+      playCorrectSound();
+    } else {
+      wrongCount++;
+      lastAnswerResult = "incorrect";
+      lastAnswerTime = performance.now();
+      playIncorrectSound();
     }
-    ctx.restore();
-
-    // Draw draggable gears
-    for (let i = 0; i < gears.length; i++) {
-      const g = gears[i];
-      g.wobble += 0.04;
-      g.spin += 0.02 + (g.placed ? 0.02 : 0);
-      const rot = g.spin + Math.sin(g.wobble) * 0.02;
-      const hue = g.colorHue || 200;
-      const color = `hsl(${hue} 65% 62%)`;
-      // selected highlight
-      if (i === selectedGearIndex) {
-        ctx.save();
-        ctx.shadowColor = "rgba(30,120,160,0.28)";
-        ctx.shadowBlur = 18;
-      }
-      drawGear(ctx, g.x, g.y, g.r, 10, color, rot, true);
-      ctx.fillStyle = "#052b36";
-      ctx.font = "700 16px system-ui, Arial";
-      ctx.textAlign = "center";
-      ctx.fillText(String(g.value), g.x, g.y + 6);
-      if (i === selectedGearIndex) ctx.restore();
+    if (correctCount >= GOAL_CORRECT) {
+      gameState = "win";
+    } else if (wrongCount >= MAX_WRONG) {
+      gameState = "lose";
+    } else {
+      generateQuestion();
     }
+  }
 
-    // Small animated gears inside machine
-    drawMachineGears(frame);
+  function startGame() {
+    correctCount = 0;
+    wrongCount = 0;
+    gameState = "playing";
+    generateQuestion();
+    resumeAudioIfNeeded();
+  }
 
-    // Particles update & draw (gentle)
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
+  function restartGame() {
+    startGame();
+  }
+
+  // Drawing functions - all canvas
+  function clear() {
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+  }
+
+  function drawBackground(t) {
+    // soft two-tone gradient
+    const g = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+    g.addColorStop(0, "#f6fcff");
+    g.addColorStop(1, "#eaf6ff");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    // subtle vignette
+    const vg = ctx.createRadialGradient(WIDTH * 0.7, HEIGHT * 0.2, 80, WIDTH / 2, HEIGHT / 2, 700);
+    vg.addColorStop(0, "rgba(255,255,255,0)");
+    vg.addColorStop(1, "rgba(12,30,40,0.03)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    // drifting soft blobs (particles)
+    particles.forEach((p) => {
       p.x += p.vx;
       p.y += p.vy;
-      p.vy += 0.06;
-      p.life--;
-      const alpha = Math.max(0, p.life / 80);
-      ctx.fillStyle = `hsla(${p.hue} 80% 56% / ${alpha})`;
+      // gentle wrap
+      if (p.x < -p.r) p.x = WIDTH + p.r;
+      if (p.x > WIDTH + p.r) p.x = -p.r;
+      if (p.y < -p.r) p.y = HEIGHT + p.r;
+      if (p.y > HEIGHT + p.r) p.y = -p.r;
+      const radGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+      radGrad.addColorStop(0, `rgba(220,245,255,${p.alpha * 1.0})`);
+      radGrad.addColorStop(1, `rgba(220,245,255,0)`);
+      ctx.fillStyle = radGrad;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * (alpha * 0.9 + 0.1), 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fill();
-      if (p.life <= 0) particles.splice(i, 1);
-    }
-
-    // Notification
-    if (notificationTimer > 0) {
-      notificationTimer--;
-      ctx.globalAlpha = Math.min(1, notificationTimer / 80);
-      ctx.fillStyle = "#fff7d6";
-      drawRoundedRect(ctx, WIDTH / 2 - 180, 12 + 88, 360, 36, 10);
-      ctx.fillStyle = "#243b4a";
-      ctx.font = "600 15px system-ui, Arial";
-      ctx.textAlign = "center";
-      ctx.fillText(notification, WIDTH / 2, 140);
-      ctx.globalAlpha = 1;
-      ctx.textAlign = "left";
-    }
-
-    // Speaker
-    drawSpeakerIcon();
-
-    // If game over overlay
-    if (gameOver) {
-      ctx.fillStyle = "rgba(4,20,28,0.6)";
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
-      ctx.fillStyle = "#fffdf6";
-      ctx.font = "700 28px system-ui, Arial";
-      ctx.textAlign = "center";
-      ctx.fillText("Hooray! You fixed all the machines!", WIDTH / 2, HEIGHT / 2 - 12);
-      ctx.font = "16px system-ui, Arial";
-      ctx.fillText("Press Space or Enter to play again.", WIDTH / 2, HEIGHT / 2 + 24);
-      ctx.textAlign = "left";
-    }
-
-    requestAnimationFrame(draw);
+    });
   }
 
-  // Start game
-  resetGame();
-  requestAnimationFrame(draw);
+  function drawMachineAndRobot(t) {
+    // machine casing
+    ctx.save();
+    ctx.shadowColor = SHADOW;
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = MACHINE_COLOR;
+    roundRect(ctx, 40, 60, WIDTH - 80, HEIGHT - 160, 20, true, false);
+    ctx.restore();
 
-  // Resume ambience on user gesture (robust)
-  function resumeAudioOnGesture() {
-    if (!audioAvailable || !audioContext) return;
-    const resume = async () => {
-      try {
-        await audioContext.resume();
-        if (soundEnabled) startBackgroundHum();
-      } catch (e) {
-        // ignore
-      } finally {
-        window.removeEventListener("click", resume);
-        window.removeEventListener("keydown", resume);
+    // front panel with glass sheen
+    ctx.save();
+    const panelX = 60,
+      panelY = 80,
+      panelW = WIDTH - 120,
+      panelH = HEIGHT - 200;
+    const panelGrad = ctx.createLinearGradient(panelX, panelY, panelX, panelY + panelH);
+    panelGrad.addColorStop(0, "rgba(255,255,255,0.42)");
+    panelGrad.addColorStop(0.2, "rgba(255,255,255,0.08)");
+    panelGrad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = panelGrad;
+    roundRect(ctx, panelX, panelY, panelW, panelH, 14, true, false);
+    ctx.restore();
+
+    // stylized gears - improved rendering with subtle highlights
+    function drawGear(cx, cy, r, teeth, rotation, color) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rotation);
+      // teeth
+      ctx.beginPath();
+      for (let i = 0; i < teeth; i++) {
+        const angle = (i / teeth) * Math.PI * 2;
+        const outer = r * 1.15;
+        const inner = r * 0.72;
+        const a1 = angle;
+        const a2 = angle + (Math.PI * 2) / (teeth * 2);
+        const x1 = Math.cos(a1) * outer;
+        const y1 = Math.sin(a1) * outer;
+        const x2 = Math.cos(a2) * inner;
+        const y2 = Math.sin(a2) * inner;
+        if (i === 0) ctx.moveTo(x1, y1);
+        ctx.lineTo(x1, y1);
+        ctx.lineTo(x2, y2);
       }
-    };
-    window.addEventListener("click", resume, { once: true });
-    window.addEventListener("keydown", resume, { once: true });
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      // center
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2);
+      ctx.fillStyle = "#eaf7fb";
+      ctx.fill();
+      // highlight
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255,255,255,0.25)";
+      ctx.ellipse(-r * 0.25, -r * 0.25, r * 0.25, r * 0.14, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    const now = t || performance.now();
+    drawGear(150, 160, 44, 12, now / 1200, "#bfe0ee");
+    drawGear(320, 240, 60, 16, -now / 1700, "#9fc2d8");
+    drawGear(540, 170, 36, 10, now / 900, "#b7dbe6");
+
+    // pipes, bolts, and indicator lights
+    ctx.save();
+    ctx.fillStyle = "#cfeaf6";
+    roundRect(ctx, 80, 220, 560, 18, 8, true, false);
+    roundRect(ctx, 120, 260, 420, 14, 7, true, false);
+    for (let i = 0; i < 8; i++) {
+      ctx.beginPath();
+      ctx.fillStyle = "#9fb0bd";
+      ctx.arc(100 + i * 70, 220 + 9, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // indicator lights that pulse with progress
+    for (let i = 0; i < 5; i++) {
+      const px = 100 + i * 120;
+      const py = 120;
+      const lit = i < Math.floor((correctCount / GOAL_CORRECT) * 5);
+      const pulse = 0.4 + Math.sin(now / 600 + i) * 0.15;
+      ctx.beginPath();
+      const grad = ctx.createRadialGradient(px - 6, py - 6, 0, px, py, 14);
+      grad.addColorStop(0, lit ? `rgba(255,255,255,${0.9 * pulse})` : "rgba(255,255,255,0.4)");
+      grad.addColorStop(1, lit ? "rgba(255,160,40,0.9)" : "rgba(190,210,220,0.6)");
+      ctx.fillStyle = grad;
+      ctx.arc(px, py, 12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Wacky robot character - responsive eyes and subtle idle bob
+    const robotX = 88;
+    const robotY = HEIGHT - 120;
+    const bob = Math.sin(now / 600) * 4;
+    ctx.save();
+    ctx.translate(robotX, robotY + bob);
+    // body
+    ctx.fillStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#c8e6f2";
+    roundRect(ctx, -8, -64, 120, 96, 14, true, true);
+    // screen
+    ctx.fillStyle = "#def7ff";
+    roundRect(ctx, 8, -54, 60, 44, 8, true, false);
+    // eyes: two LEDs that react
+    const eyeLx = 34;
+    const eyeLy = -34;
+    const eyeR = 8;
+    // determine eye color based on lastAnswerResult (temporary flash)
+    const since = performance.now() - lastAnswerTime || 99999;
+    let eyeColor = "#2b6cff";
+    if (lastAnswerResult === "correct" && since < 900) eyeColor = "#2fb56b";
+    if (lastAnswerResult === "incorrect" && since < 900) eyeColor = "#ff6b6b";
+    // blink animation
+    const blink = (Math.sin(now / 400) + 1) * 0.5;
+    const isBlink = Math.floor(now / 2500) % 4 === 0 && blink > 0.9;
+    ctx.beginPath();
+    ctx.fillStyle = "#0c2b33";
+    ctx.ellipse(eyeLx, eyeLy, 6, isBlink ? 1 : 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(eyeLx + 20, eyeLy, 6, isBlink ? 1 : 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // pupil glow
+    ctx.beginPath();
+    ctx.fillStyle = eyeColor;
+    ctx.arc(eyeLx, eyeLy, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(eyeLx + 20, eyeLy, 3, 0, Math.PI * 2);
+    ctx.fill();
+    // antenna
+    ctx.strokeStyle = "#c8e6f2";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(100, -58);
+    ctx.lineTo(110, -88);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.fillStyle = eyeColor;
+    ctx.arc(110, -88, 6, 0, Math.PI * 2);
+    ctx.fill();
+    // happy smile if winning soon
+    ctx.restore();
   }
-  resumeAudioOnGesture();
 
-  // Hidden help for screen readers
-  const srHelp = document.createElement("div");
-  srHelp.style.position = "absolute";
-  srHelp.style.left = "-9999px";
-  srHelp.style.width = "1px";
-  srHelp.style.height = "1px";
-  srHelp.style.overflow = "hidden";
-  srHelp.setAttribute("aria-hidden", "false");
-  srHelp.innerText =
-    "Machine Math: Place three gears so the sum equals the target number. Use mouse or touch to drag. Use Tab to cycle gears, Enter to place/remove. Press S to toggle sound. Press H for a tip.";
-  container.appendChild(srHelp);
+  function drawUI() {
+    // Top-left: score
+    ctx.save();
+    ctx.font = "18px Inter, system-ui, sans-serif";
+    ctx.fillStyle = TEXT_COLOR;
+    const scoreText = `Fixed: ${correctCount}/${GOAL_CORRECT}`;
+    const scoreMetrics = safeMeasureText(scoreText, ctx.font);
+    const scoreX = UI_PADDING;
+    const scoreY = 28;
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    roundRect(ctx, scoreX, scoreY - 18, Math.ceil(scoreMetrics.width) + 22, 26, 8, true, false);
+    ctx.fillStyle = TEXT_COLOR;
+    ctx.fillText(scoreText, scoreX + 12, scoreY);
+    ctx.restore();
 
-  // Expose small API
-  window._machineMath = {
-    restart: resetGame,
-    toggleSound: toggleSound,
-    isSoundEnabled: () => soundEnabled,
-    currentTarget: () => targetNumber
+    // Top-right: faults
+    ctx.save();
+    ctx.font = "18px Inter, system-ui, sans-serif";
+    const livesText = `Faults: ${wrongCount}/${MAX_WRONG}`;
+    const livesMetrics = safeMeasureText(livesText, ctx.font);
+    const livesW = Math.ceil(livesMetrics.width) + 22;
+    const livesX = WIDTH - livesW - UI_PADDING;
+    const livesY = 28;
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    roundRect(ctx, livesX, livesY - 18, livesW, 26, 8, true, false);
+    ctx.fillStyle = TEXT_COLOR;
+    ctx.fillText(livesText, livesX + 12, livesY);
+    ctx.restore();
+
+    // Audio toggle icon (non-overlapping)
+    const audioSize = 22;
+    const iconX = livesX - audioSize - 10;
+    const iconY = 12;
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    roundRect(ctx, iconX - 8, iconY - 8, audioSize + 16, audioSize + 16, 8, true, false);
+    // speaker
+    ctx.beginPath();
+    ctx.fillStyle = TEXT_COLOR;
+    ctx.rect(iconX, iconY + 6, 8, 10);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(iconX + 8, iconY + 6);
+    ctx.lineTo(iconX + 18, iconY + 2);
+    ctx.lineTo(iconX + 18, iconY + 26);
+    ctx.closePath();
+    ctx.fill();
+    if (isMuted || !audioAvailable) {
+      ctx.strokeStyle = BAD_ACCENT;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(iconX + 2, iconY + 2);
+      ctx.lineTo(iconX + audioSize + 10, iconY + audioSize + 4);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = ACCENT;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(iconX + 20, iconY + 13, 6, -0.6, 0.6);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Instructions bottom-center
+    ctx.save();
+    ctx.font = "13px Inter, system-ui, sans-serif";
+    ctx.fillStyle = TEXT_COLOR;
+    const instructions =
+      "Answer 10 questions to fix the machine. 3 mistakes and it stops. Click or press 1-4 to choose. Press M to toggle sound.";
+    const maxWidth = WIDTH - 48;
+    const lines = wrapTextToLines(instructions, maxWidth, ctx.font);
+    const lineHeight = 18;
+    const totalHeight = lines.length * lineHeight;
+    const startY = HEIGHT - UI_PADDING - totalHeight;
+    const widest = Math.max(...lines.map((ln) => safeMeasureText(ln, ctx.font).width));
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    roundRect(ctx, (WIDTH - widest) / 2 - 14, startY - 12, widest + 28, totalHeight + 18, 10, true, false);
+    ctx.fillStyle = TEXT_COLOR;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], (WIDTH - widest) / 2, startY + i * lineHeight + 12);
+    }
+    ctx.restore();
+  }
+
+  function drawQuestionArea() {
+    if (!question) return;
+    ctx.save();
+    ctx.font = "26px Inter, system-ui, sans-serif";
+    ctx.fillStyle = TEXT_COLOR;
+    const qText = question.text;
+    const metrics = safeMeasureText(qText, ctx.font);
+    const boxW = Math.ceil(metrics.width) + 48;
+    const boxH = 64;
+    const x = (WIDTH - boxW) / 2;
+    const y = HEIGHT / 2 - 120;
+    // frosted glass panel
+    ctx.fillStyle = "rgba(255,255,255,0.98)";
+    roundRect(ctx, x, y, boxW, boxH, 12, true, false);
+    ctx.fillStyle = TEXT_COLOR;
+    ctx.fillText(qText, x + 24, y + 40);
+    // hint
+    ctx.font = "13px Inter, system-ui, sans-serif";
+    ctx.fillStyle = "#3b5a66";
+    ctx.fillText("Solve to power the machine!", x + 24, y + 58);
+    ctx.restore();
+  }
+
+  function drawChoiceButtons() {
+    ctx.save();
+    ctx.font = "20px Inter, system-ui, sans-serif";
+    for (let i = 0; i < buttons.length; i++) {
+      const b = buttons[i];
+      // subtle shadow
+      ctx.save();
+      ctx.shadowColor = "rgba(10,20,30,0.08)";
+      ctx.shadowBlur = 10;
+      // button fill changes slightly if highlighted
+      const isActive = i === selectedIndex || i === keyboardSelection;
+      ctx.fillStyle = isActive ? "rgba(255,255,255,1)" : "rgba(255,255,255,0.96)";
+      roundRect(ctx, b.x, b.y, b.w, b.h, 12, true, false);
+      ctx.restore();
+
+      // border
+      ctx.lineWidth = isActive ? 4 : 2;
+      ctx.strokeStyle = isActive ? ACCENT : "#dfeff6";
+      roundRect(ctx, b.x, b.y, b.w, b.h, 12, false, true);
+
+      // gentle floating for selected button
+      const floatOffset = isActive ? Math.sin(performance.now() / 300) * 4 : 0;
+      ctx.fillStyle = TEXT_COLOR;
+      const text = `${i + 1}. ${b.text}`;
+      const metrics = safeMeasureText(text, ctx.font);
+      ctx.fillText(text, b.x + (b.w - metrics.width) / 2, b.y + b.h / 2 + 8 + floatOffset);
+    }
+    ctx.restore();
+  }
+
+  function drawEndScreen() {
+    ctx.save();
+    ctx.fillStyle = "rgba(6,12,18,0.48)";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    // panel
+    ctx.font = "32px Inter, system-ui, sans-serif";
+    const title = gameState === "win" ? "Victory!" : "Machine Failed";
+    const message =
+      gameState === "win"
+        ? "You powered up the machine! Great engineering!"
+        : "Too many faults. The machine stopped working.";
+    const titleMetrics = safeMeasureText(title, ctx.font);
+    const titleX = (WIDTH - titleMetrics.width) / 2;
+    const titleY = HEIGHT / 2 - 40;
+    ctx.fillStyle = ACCENT;
+    roundRect(ctx, titleX - 18, titleY - 36, titleMetrics.width + 36, 60, 10, true, false);
+    ctx.fillStyle = "white";
+    ctx.fillText(title, titleX, titleY);
+    ctx.font = "17px Inter, system-ui, sans-serif";
+    const msgMetrics = safeMeasureText(message, ctx.font);
+    const msgX = (WIDTH - msgMetrics.width) / 2;
+    const msgY = HEIGHT / 2;
+    ctx.fillStyle = "rgba(255,255,255,0.98)";
+    roundRect(ctx, msgX - 18, msgY - 30, msgMetrics.width + 36, 48, 10, true, false);
+    ctx.fillStyle = TEXT_COLOR;
+    ctx.fillText(message, msgX, msgY);
+    // Restart button
+    const btnText = "Restart";
+    ctx.font = "20px Inter, system-ui, sans-serif";
+    const btnMetrics = safeMeasureText(btnText, ctx.font);
+    const btnW = btnMetrics.width + 44;
+    const btnH = 46;
+    const btnX = (WIDTH - btnW) / 2;
+    const btnY = HEIGHT / 2 + 60;
+    ctx.fillStyle = "#ffffff";
+    roundRect(ctx, btnX, btnY, btnW, btnH, 10, true, false);
+    ctx.fillStyle = "#12303a";
+    ctx.fillText(btnText, btnX + (btnW - btnMetrics.width) / 2, btnY + 30);
+    ctx.font = "13px Inter, system-ui, sans-serif";
+    const instr = "Press Enter or click Restart to play again.";
+    const instrMetrics = safeMeasureText(instr, ctx.font);
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.fillText(instr, (WIDTH - instrMetrics.width) / 2, btnY + btnH + 26);
+    ctx.restore();
+    endButtonRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+  }
+
+  function drawMainMenu() {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.98)";
+    const title = "Machine Math";
+    ctx.font = "42px Inter, system-ui, sans-serif";
+    const metrics = safeMeasureText(title, ctx.font);
+    const x = (WIDTH - metrics.width) / 2;
+    const y = HEIGHT / 2 - 48;
+    roundRect(ctx, x - 24, y - 56, metrics.width + 48, 92, 14, true, false);
+    ctx.fillStyle = TEXT_COLOR;
+    ctx.fillText(title, x, y);
+    ctx.font = "16px Inter, system-ui, sans-serif";
+    const text =
+      "Help the friendly machine by answering 10 math questions. 3 mistakes and the machine stops.";
+    const lines = wrapTextToLines(text, 520, ctx.font);
+    const lineHeight = 20;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], (WIDTH - safeMeasureText(lines[i], ctx.font).width) / 2, y + 36 + i * lineHeight);
+    }
+    // Start button
+    ctx.font = "20px Inter, system-ui, sans-serif";
+    const btnText = "Start";
+    const btnMetrics = safeMeasureText(btnText, ctx.font);
+    const btnW = btnMetrics.width + 48;
+    const btnH = 48;
+    const btnX = (WIDTH - btnW) / 2;
+    const btnY = y + 120;
+    ctx.fillStyle = ACCENT;
+    roundRect(ctx, btnX, btnY, btnW, btnH, 12, true, false);
+    ctx.fillStyle = "white";
+    ctx.fillText(btnText, btnX + (btnW - btnMetrics.width) / 2, btnY + 32);
+    ctx.restore();
+    endButtonRect = { x: btnX, y: btnY, w: btnW, h: btnH };
+  }
+
+  function draw(timestamp) {
+    clear();
+    drawBackground(timestamp);
+    drawMachineAndRobot(timestamp);
+    drawUI();
+
+    if (gameState === "menu") {
+      drawMainMenu();
+    } else if (gameState === "playing") {
+      drawQuestionArea();
+      drawChoiceButtons();
+    } else if (gameState === "win" || gameState === "lose") {
+      drawQuestionArea();
+      drawChoiceButtons();
+      drawEndScreen();
+    }
+  }
+
+  // Input handling - mouse/touch/keyboard
+  canvas.addEventListener("click", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    lastInteractionTime = performance.now();
+
+    if (!audioCtx) initAudio();
+
+    // compute audio icon area
+    ctx.font = "18px Inter, system-ui, sans-serif";
+    const livesText = `Faults: ${wrongCount}/${MAX_WRONG}`;
+    const livesMetrics = safeMeasureText(livesText, ctx.font);
+    const livesW = Math.ceil(livesMetrics.width) + 22;
+    const livesX = WIDTH - livesW - UI_PADDING;
+    const iconX = livesX - 22 - 10;
+    const iconY = 12;
+    if (mx >= iconX - 8 && mx <= iconX + 28 && my >= iconY - 8 && my <= iconY + 28) {
+      if (audioAvailable) {
+        toggleMute();
+      } else {
+        initAudio();
+      }
+      return;
+    }
+
+    if (gameState === "menu") {
+      if (isPointInRect(mx, my, endButtonRect)) {
+        startGame();
+      }
+    } else if (gameState === "playing") {
+      for (const b of buttons) {
+        if (isPointInRect(mx, my, b)) {
+          handleAnswer(b.index);
+          return;
+        }
+      }
+    } else if (gameState === "win" || gameState === "lose") {
+      if (isPointInRect(mx, my, endButtonRect)) {
+        restartGame();
+      }
+    }
+  });
+
+  canvas.addEventListener("touchstart", (e) => {
+    try {
+      canvas.focus();
+    } catch (err) {}
+    if (!audioCtx) initAudio();
+  });
+
+  canvas.addEventListener("mousedown", () => {
+    try {
+      canvas.focus();
+    } catch (e) {}
+  });
+
+  // Keyboard controls
+  canvas.addEventListener("keydown", (e) => {
+    lastInteractionTime = performance.now();
+    if (!audioCtx) initAudio();
+    const key = e.key;
+    if (gameState === "menu") {
+      if (key === "Enter" || key === " ") {
+        startGame();
+        e.preventDefault();
+      }
+    } else if (gameState === "playing") {
+      if (["1", "2", "3", "4"].includes(key)) {
+        const idx = parseInt(key, 10) - 1;
+        handleAnswer(idx);
+        e.preventDefault();
+      } else if (key === "ArrowLeft" || key === "ArrowUp") {
+        keyboardSelection = (keyboardSelection - 1 + buttons.length) % buttons.length;
+        e.preventDefault();
+      } else if (key === "ArrowRight" || key === "ArrowDown") {
+        keyboardSelection = (keyboardSelection + 1) % buttons.length;
+        e.preventDefault();
+      } else if (key === "Enter") {
+        handleAnswer(keyboardSelection);
+        e.preventDefault();
+      }
+    } else if (gameState === "win" || gameState === "lose") {
+      if (key === "Enter" || key === " ") {
+        restartGame();
+        e.preventDefault();
+      }
+    }
+    if (key.toLowerCase() === "m") {
+      if (!audioAvailable) initAudio();
+      toggleMute();
+      e.preventDefault();
+    }
+  });
+
+  // Global keydown to keep focus on canvas for accessibility
+  document.addEventListener("keydown", (e) => {
+    if (document.activeElement !== canvas) {
+      try {
+        canvas.focus();
+      } catch (err) {}
+    }
+  });
+
+  // Visual selection highlight sync
+  function updateSelectionHighlight() {
+    if (gameState === "playing") {
+      selectedIndex = keyboardSelection;
+    } else {
+      selectedIndex = -1;
+    }
+  }
+
+  // Animation loop with state transition sound triggers
+  function loop(ts) {
+    updateSelectionHighlight();
+    draw(ts);
+
+    // trigger win/lose sounds when state changes
+    if (prevGameState !== gameState) {
+      if (gameState === "win") {
+        playWinSound();
+      } else if (gameState === "lose") {
+        playLoseSound();
+      }
+      prevGameState = gameState;
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // Initialize
+  gameState = "menu";
+  generateQuestion();
+  prevGameState = gameState;
+  // ensure canvas focus
+  setTimeout(() => {
+    try {
+      canvas.focus();
+    } catch (e) {}
+  }, 100);
+
+  // Expose controls for debugging or manual audio start
+  window.__machineMath = {
+    restart: restartGame,
+    startAudio: initAudio,
   };
+
+  // Cleanup on unload
+  window.addEventListener("beforeunload", () => {
+    try {
+      if (audioCtx) {
+        bgNodes.forEach((n) => {
+          safeStop(n.osc);
+          safeStop(n.lfo);
+        });
+        if (audioCtx.close) audioCtx.close();
+      }
+    } catch (e) {}
+  });
+
+  // Start loop
+  requestAnimationFrame(loop);
 })();

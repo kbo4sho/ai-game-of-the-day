@@ -329,8 +329,8 @@ function initializeDailyGames() {
     fetch('games/index.json')
         .then(res => res.json())
         .then(dates => {
-            // Sort dates chronologically
-            dates.sort();
+            // Sort dates chronologically (newest first)
+            dates.sort().reverse();
             
             // Create cards for all available games
             const cards = dates.map(dateString => {

@@ -689,6 +689,8 @@
       if (this.heldCog) {
         let placed = false;
         for (const slot of this.slots) {
+          // For keyboard: check if arm X is over slot (Y check uses slot.y so always passes)
+          // This allows placement even though held cog is at arm height, not slot height
           if (slot.containsPoint(this.armX, slot.y)) {
             this.placeInSlot(slot);
             placed = true;
@@ -833,16 +835,17 @@
       const move = clamp(dist, -this.armSpeed * dt / 1000, this.armSpeed * dt / 1000);
       this.armX += move;
 
-      // Update cogs
+      // Update cogs - preserve individual speed variations
       for (const cog of this.cogs) {
-        cog.speed = this.conveyorSpeed * (Math.sign(cog.speed) || 1);
-        cog.update(dt / 16);
+        if (!cog.picked) {
+          cog.update(dt / 16);
+        }
       }
 
-      // hold behavior
+      // hold behavior - use faster lerp for more responsive controls
       if (this.heldCog) {
-        this.heldCog.x += (this.armX - this.heldCog.x) * 0.45;
-        this.heldCog.y += (this.armY + 24 - this.heldCog.y) * 0.25;
+        this.heldCog.x += (this.armX - this.heldCog.x) * 0.65;
+        this.heldCog.y += (this.armY + 24 - this.heldCog.y) * 0.45;
       }
 
       // speaker animation tick (when toggled)

@@ -106,7 +106,7 @@ def validate_no_external_dependencies(code):
 
 # Configuration variables
 MODEL_NAME = "gpt-5-mini" 
-THEME_OF_THE_DAY = "machines"
+THEME_OF_THE_DAY = "drones"
 ACCESSIBILITY_THRESHOLD = 60  # Minimum accessibility score required
 
 # Load your OpenAI API key from GitHub Secrets or environment
@@ -120,7 +120,12 @@ with open('games/latest.js', 'r') as f:
 prompt = f"""You are an expert educational game designer. You will generate a fun, playable math game in JavaScript for children ages 7 to 9, focused on foundational concepts presented in a way that is engaging and fun. Today's theme: {THEME_OF_THE_DAY}
 
 The game must:
-• Be beatable.
+• Be beatable with CLEAR WIN AND LOSS CONDITIONS:
+  - Include a specific goal (e.g., "answer 10 questions correctly", "reach level 5", "collect 50 stars")
+  - Include a way to lose or fail (e.g., "3 wrong answers = game over", "timer runs out", "lives system")
+  - Show a victory screen when the player wins
+  - Show a game over screen when the player loses
+  - Include a restart button or instruction on both end screens
 • Use visually calming and interesting and wacky elements.
 • Include sound, using the Web Audio API for correct/incorrect feedback, gentle background effects, or interactions. Use an audio context.
 • Render entirely inside the existing HTML element with ID game-of-the-day-stage. You may create a canvas element inside it .
@@ -129,6 +134,13 @@ The game must:
 • Use modern JavaScript practices and avoid minification.
 • Include proper error handling for audio and resource loading.
 • Be accessible: include keyboard controls, text alternatives, visual cues for audio, clear instructions, and error handling.
+• Have PROPER UI LAYOUT with NO OVERLAPPING TEXT:
+  - Ensure all text has adequate spacing (minimum 10px padding between UI elements)
+  - Use ctx.measureText() to calculate text width before drawing
+  - Place UI elements in non-overlapping positions (e.g., score top-left, lives top-right, instructions bottom-center)
+  - Use background rectangles behind text for readability
+  - Test that multi-line text doesn't overlap with game elements
+  - Ensure proper font sizes (minimum 14px for body text, 18px+ for important info)
 • Use ONLY canvas-drawn graphics or 3js and Web Audio API - NO external image URLs, NO external audio files, NO external dependencies.
 • Create all visual elements using canvas drawing methods (rect, arc, fillText, etc.) or 3js.
 • Generate all sounds using Web Audio API oscillators and filters.
@@ -177,6 +189,8 @@ The game must:
 • Render entirely inside the existing HTML element with ID game-of-the-day-stage
 • Have a game area exactly 720px wide by 480px tall
 • Be written in clean, readable JavaScript with proper formatting
+• MAINTAIN clear win and loss conditions - do not remove game completion logic
+• MAINTAIN proper UI spacing - ensure no text overlaps
 • Output only JavaScript code - no markdown formatting, no code blocks
 • Do not wrap the code in ```javascript or any other markdown formatting
 
@@ -228,6 +242,10 @@ Functionality improvements needed:
 - Include a game loop or animation system
 - Add basic error handling
 - Include game state management (score, lives, levels, etc.)
+- ADD CLEAR WIN CONDITION: The player must be able to WIN the game (e.g., reach a goal, complete levels, get high score)
+- ADD CLEAR LOSS CONDITION: The player must be able to LOSE the game (e.g., run out of lives, time limit expires, too many mistakes)
+- ADD END SCREENS: Show victory and game over screens with restart options
+- FIX UI LAYOUT: Ensure no text overlaps, proper spacing between elements, use measureText() for positioning
 
 The game must:
 • Render entirely inside the existing HTML element with ID game-of-the-day-stage. You may create a canvas element inside it.
@@ -235,6 +253,7 @@ The game must:
 • Be written in clean, readable JavaScript with proper formatting, indentation, and comments.
 • Use modern JavaScript practices and avoid minification.
 • Include proper error handling for audio and resource loading.
+• Have a clear beginning, middle, and end - not endless gameplay
 • Output only JavaScript code. No extra explanation, no markdown formatting, no code blocks.
 • Do not wrap the code in ```javascript or any other markdown formatting.
 
@@ -370,6 +389,8 @@ Use ONLY canvas-drawn graphics and Web Audio API - NO external image URLs, NO ex
 Create all visual elements using canvas drawing methods (rect, arc, fillText, etc.).
 Generate all sounds using Web Audio API oscillators and filters.
 Include proper error handling for audio context creation.
+MAINTAIN clear win and loss conditions - do not remove game completion logic or end screens.
+MAINTAIN proper UI spacing - ensure text has padding, no overlaps, and proper alignment.
 Output only JavaScript code. No extra explanation, no markdown formatting, no code blocks.
 Do not wrap the code in ```javascript or any other markdown formatting.
 

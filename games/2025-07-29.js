@@ -119,11 +119,7 @@ const explorer = {
     velY: 0,
     jumping: false,
     onGround: false,
-    img: null,
-    frame: 0,
-    frameCount: 4,
-    frameTimer: 0,
-    frameInterval: 10
+    img: null
 };
 
 const friend = {
@@ -132,11 +128,7 @@ const friend = {
     width: 48,
     height: 64,
     color: '#4da6ff',
-    img: null,
-    frame: 0,
-    frameCount: 4,
-    frameTimer: 0,
-    frameInterval: 20
+    img: null
 };
 
 const terrain = [];
@@ -184,13 +176,9 @@ function drawRect(r) {
 
 function drawExplorer() {
     if (explorer.img.complete && explorer.img.naturalWidth > 0) {
-        explorer.frameTimer++;
-        if (explorer.frameTimer >= explorer.frameInterval) {
-            explorer.frame++;
-            explorer.frameTimer = 0;
-            if (explorer.frame >= explorer.frameCount) explorer.frame = 0;
-        }
-        ctx.drawImage(explorer.img, explorer.frame * 48, 0, 48, 64, explorer.x, explorer.y, explorer.width, explorer.height);
+        // Simple bobbing animation by adjusting y position
+        const bobOffset = Math.abs(explorer.velX) > 0.1 ? Math.sin(Date.now() / 150) * 2 : 0;
+        ctx.drawImage(explorer.img, explorer.x, explorer.y + bobOffset, explorer.width, explorer.height);
     } else {
         // Fallback drawing
         ctx.fillStyle = explorer.color;
@@ -213,13 +201,9 @@ function drawExplorer() {
 
 function drawFriend() {
     if (friend.img.complete && friend.img.naturalWidth > 0) {
-        friend.frameTimer++;
-        if (friend.frameTimer >= friend.frameInterval) {
-            friend.frame++;
-            friend.frameTimer = 0;
-            if (friend.frame >= friend.frameCount) friend.frame = 0;
-        }
-        ctx.drawImage(friend.img, friend.frame * 48, 0, 48, 64, friend.x, friend.y, friend.width, friend.height);
+        // Simple idle animation with slow bobbing
+        const bobOffset = Math.sin(Date.now() / 300) * 3;
+        ctx.drawImage(friend.img, friend.x, friend.y + bobOffset, friend.width, friend.height);
     } else {
         // Fallback drawing
         ctx.fillStyle = friend.color;
@@ -325,7 +309,7 @@ function updateExplorer() {
 }
 
 function checkCollision(a, b) {
-    return a.x < a.x + b.width && a.x + a.width > b.x && a.y < a.y + b.height && a.y + a.height > b.y;
+    return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
 function rectCircleColliding(rect, circle) {

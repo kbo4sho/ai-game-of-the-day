@@ -167,12 +167,16 @@ class Player {
     this.answer = null; // current input answer for math quizzes
     this.activeQuiz = null;
   }
-  draw() {
+  draw(camera) {
+    // Convert world position to screen position
+    const screenX = this.pos.x - camera.x;
+    const screenY = this.pos.y - camera.y;
+    
     ctx.fillStyle = this.color;
     ctx.beginPath();
-    ctx.moveTo(this.pos.x, this.pos.y - this.size/2);
-    ctx.lineTo(this.pos.x - this.size/2, this.pos.y + this.size/2);
-    ctx.lineTo(this.pos.x + this.size/2, this.pos.y + this.size/2);
+    ctx.moveTo(screenX, screenY - this.size/2);
+    ctx.lineTo(screenX - this.size/2, screenY + this.size/2);
+    ctx.lineTo(screenX + this.size/2, screenY + this.size/2);
     ctx.closePath();
     ctx.fill();
   }
@@ -200,36 +204,40 @@ class NPC {
     this.correctAnswer = correctAnswer;
     this.talkedTo = false;
   }
-  draw() {
+  draw(camera) {
+    // Convert world position to screen position
+    const screenX = this.pos.x - camera.x;
+    const screenY = this.pos.y - camera.y;
+    
     ctx.fillStyle = this.color;
     ctx.beginPath();
-    ctx.ellipse(this.pos.x, this.pos.y, this.size/2, this.size*0.75/2, 0, 0, 2 * Math.PI);
+    ctx.ellipse(screenX, screenY, this.size/2, this.size*0.75/2, 0, 0, 2 * Math.PI);
     ctx.fill();
     // eyes
     ctx.fillStyle = 'white';
     ctx.beginPath();
-    ctx.ellipse(this.pos.x - 6, this.pos.y - 4, 5, 7, 0, 0, 2 * Math.PI);
-    ctx.ellipse(this.pos.x + 6, this.pos.y - 4, 5, 7, 0, 0, 2 * Math.PI);
+    ctx.ellipse(screenX - 6, screenY - 4, 5, 7, 0, 0, 2 * Math.PI);
+    ctx.ellipse(screenX + 6, screenY - 4, 5, 7, 0, 0, 2 * Math.PI);
     ctx.fill();
 
     ctx.fillStyle = 'black';
     ctx.beginPath();
-    ctx.ellipse(this.pos.x - 6, this.pos.y - 4, 2, 3, 0, 0, 2 * Math.PI);
-    ctx.ellipse(this.pos.x + 6, this.pos.y - 4, 2, 3, 0, 0, 2 * Math.PI);
+    ctx.ellipse(screenX - 6, screenY - 4, 2, 3, 0, 0, 2 * Math.PI);
+    ctx.ellipse(screenX + 6, screenY - 4, 2, 3, 0, 0, 2 * Math.PI);
     ctx.fill();
 
     // smile
     ctx.strokeStyle = 'black';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(this.pos.x, this.pos.y + 6, 10, 0, Math.PI, false);
+    ctx.arc(screenX, screenY + 6, 10, 0, Math.PI, false);
     ctx.stroke();
 
     // name text above NPC
     ctx.fillStyle = '#222';
     ctx.font = '14px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText(this.name, this.pos.x, this.pos.y - this.size);
+    ctx.fillText(this.name, screenX, screenY - this.size);
   }
 }
 
@@ -352,23 +360,19 @@ let npcs = [
 
 const keysDown = {};
 window.addEventListener('keydown', evt => {
-  if(gameState.awaitingAnswer && isDigit(evt.key)) {
-    // Append digit for answer input (limit 3 digits)
-    if(gameState.playerAnswer.length < 3) {
-      gameState.playerAnswer += evt.key;
-    }
-    if(evt.key === 'Backspace') {
+  if(gameState.awaitingAnswer) {
+    if(isDigit(evt.key)) {
+      // Append digit for answer input (limit 3 digits)
+      if(gameState.playerAnswer.length < 3) {
+        gameState.playerAnswer += evt.key;
+      }
+    } else if(evt.key === 'Backspace') {
       gameState.playerAnswer = gameState.playerAnswer.slice(0, -1);
+    } else if(evt.key === 'Enter') {
+      gameState.checkAnswer();
     }
-  }
-  if(!gameState.awaitingAnswer){
+  } else {
     keysDown[evt.key.toLowerCase()] = true;
-  }
-  if(gameState.awaitingAnswer && evt.key === 'Backspace') {
-    gameState.playerAnswer = gameState.playerAnswer.slice(0, -1);
-  }
-  if(gameState.awaitingAnswer && evt.key === 'Enter') {
-    gameState.checkAnswer();
   }
 });
 window.addEventListener('keyup', evt => {
@@ -400,6 +404,7 @@ const gameState = {
       this.messageTimer = 200;
       player.score += 10;
       this.currentNPC.talkedTo = true;
+      playCorrectSound();
       // generate new math problem for next time
       let {question, answer} = generateMathProblem();
       this.currentNPC.mathProblem = question;
@@ -407,6 +412,7 @@ const gameState = {
     } else {
       this.messageText = `Oops! The answer was ${this.currentNPC.correctAnswer}. Try next time!`;
       this.messageTimer = 200;
+      playWrongSound();
     }
     this.awaitingAnswer = false;
     this.currentNPC = null;
@@ -434,13 +440,12 @@ function gameLoop() {
   // Draw NPCs in camera view
   npcs.forEach(npc => {
     if(dist(npc.pos, player.pos) < 200 + npc.size) {
-      npc.drawAt = npc.pos.subtract(new Vector2(camera.x, camera.y));
-      npc.draw();
+      npc.draw(camera);
     }
   });
 
   // Draw player on screen (centered relative to camera)
-  player.draw();
+  player.draw(camera);
 
   drawGameplayHUD();
 
@@ -460,14 +465,18 @@ function handleInput() {
     right: keysDown['d'] || keysDown['arrowright'],
   });
 
-  // Check interaction with NPCs (E key)
-  if(keysDown['e']) {
+  // Check interaction with NPCs (E key or Space)
+  if(keysDown['e'] || keysDown[' ']) {
     let nearNPC = npcs.find(npc => dist(npc.pos, player.pos) < 50 && !npc.talkedTo);
     if(nearNPC && !gameState.awaitingAnswer) {
+      initAudio();
+      resumeAudioOnInteraction();
       gameState.awaitingAnswer = true;
       gameState.currentNPC = nearNPC;
       gameState.playerAnswer = '';
+      playInteractSound();
       keysDown['e'] = false; // prevent repeated triggers
+      keysDown[' '] = false;
     }
   }
 }
@@ -491,6 +500,8 @@ let started = false;
 function waitForStart(e) {
   started = true;
   window.removeEventListener('keydown', waitForStart);
+  initAudio();
+  resumeAudioOnInteraction();
   gameLoop();
 }
 window.addEventListener('keydown', waitForStart);
@@ -503,3 +514,5 @@ function preStartLoop() {
   if(!started) requestAnimationFrame(preStartLoop);
 }
 preStartLoop();
+
+})();
